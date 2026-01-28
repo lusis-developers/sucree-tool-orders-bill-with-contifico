@@ -101,4 +101,28 @@ export class POSService {
     await order.save();
     return dispatch;
   }
+
+  /**
+   * Get pickup orders for a specific branch.
+   * Filters by deliveryType: 'retiro' and branch.
+   * Returns active/future orders (e.g. not delivered/completed if status existed, but we'll list all for now or sort by date).
+   */
+  async getPickupOrders(branch: string) {
+    if (!branch) {
+      throw new Error("Branch parameter is required");
+    }
+
+    // Find orders that are for pickup at this branch
+    // We can filter by date if needed (e.g. deliveryDate >= today - 1 day)
+    // For now, let's just get the recent ones (limit 50 or sort desc)
+    const orders = await models.orders.find({
+      deliveryType: "retiro",
+      branch: branch
+    })
+      .sort({ deliveryDate: 1 }) // Soonest first
+      .select("orderNumber customerName deliveryDate deliveryTime products productionStatus totalValue paymentMethod paymentDetails")
+      .limit(100);
+
+    return orders;
+  }
 }
