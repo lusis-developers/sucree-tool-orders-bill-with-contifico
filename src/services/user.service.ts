@@ -78,6 +78,12 @@ export class UserService {
         name: "Producción",
         role: "production",
       },
+      {
+        email: "retailmanager@nicole.com.ec",
+        password: "Nicole2020!",
+        name: "Retail Manager",
+        role: "RetailManager",
+      },
     ];
 
     console.log("🌱 Checking users seed...");
