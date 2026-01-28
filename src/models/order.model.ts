@@ -15,6 +15,8 @@ export interface IDispatchItem {
   productId: string; // The _id of the product in the products array
   name: string;      // Snapshot of name for UI ease
   quantitySent: number;
+  quantityReceived?: number;
+  itemStatus?: "OK" | "MISSING" | "DAMAGED";
 }
 
 export interface IDispatch {
@@ -25,6 +27,12 @@ export interface IDispatch {
   items: IDispatchItem[];
   notes?: string;
   reportedBy: string; // e.g. "Production User"
+
+  // Reception Fields
+  receptionStatus: "PENDING" | "RECEIVED" | "PROBLEM";
+  receivedAt?: Date;
+  receivedBy?: string;
+  receptionNotes?: string;
 }
 
 export interface IOrder extends Document {
@@ -82,11 +90,23 @@ const DispatchSchema = new Schema<IDispatch>({
     {
       productId: { type: String, required: true },
       name: { type: String },
-      quantitySent: { type: Number, required: true }
+      quantitySent: { type: Number, required: true },
+      quantityReceived: { type: Number },
+      itemStatus: { type: String, enum: ["OK", "MISSING", "DAMAGED"], default: "OK" }
     }
   ],
   notes: { type: String },
-  reportedBy: { type: String, default: "Producción" }
+  reportedBy: { type: String, default: "Producción" },
+
+  // Reception Fields
+  receptionStatus: {
+    type: String,
+    enum: ["PENDING", "RECEIVED", "PROBLEM"],
+    default: "PENDING"
+  },
+  receivedAt: { type: Date },
+  receivedBy: { type: String },
+  receptionNotes: { type: String }
 });
 
 const OrderSchema = new Schema<IOrder>(
