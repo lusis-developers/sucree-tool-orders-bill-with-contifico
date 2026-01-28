@@ -6,6 +6,7 @@ import DocumentRouter from "./document.router";
 import AnalyticsRouter from "./analytics.router";
 import UserRouter from "./user.router";
 import ProductionRouter from "./production.router";
+import POSRouter from "./pos.router";
 
 function routerApi(app: Application) {
   const router = express.Router();
@@ -17,6 +18,7 @@ function routerApi(app: Application) {
   router.use("/analytics", AnalyticsRouter);
   router.use("/users", UserRouter);
   router.use("/production", ProductionRouter);
+  router.use("/pos", POSRouter);
 }
 
 export default routerApi;
