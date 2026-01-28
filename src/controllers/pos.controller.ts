@@ -66,3 +66,29 @@ export async function confirmReception(req: Request, res: Response) {
     res.status(HttpStatusCode.InternalServerError).send({ message: "Failed to confirm reception.", error: error.message });
   }
 }
+
+/**
+ * GET /api/pos/pickups
+ * Query Params: branch (required)
+ */
+export async function getPickupOrders(req: Request, res: Response) {
+  try {
+    const { branch } = req.query;
+
+    if (!branch) {
+      res.status(HttpStatusCode.BadRequest).send({ message: "Branch parameter is required." });
+      return;
+    }
+
+    const orders = await posService.getPickupOrders(branch as string);
+
+    res.status(HttpStatusCode.Ok).send({
+      message: "Pickup orders retrieved successfully.",
+      count: orders.length,
+      data: orders
+    });
+  } catch (error: any) {
+    console.error("Error retrieving pickup orders:", error);
+    res.status(HttpStatusCode.InternalServerError).send({ message: "Failed to retrieve pickup orders.", error: error.message });
+  }
+}
