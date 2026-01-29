@@ -180,6 +180,7 @@ const OrderSchema = new Schema<IOrder>(
       email: { type: String },
       address: { type: String },
     },
+    invoiceInfo: { type: Schema.Types.Mixed },
 
     // Production Fields
     productionStage: {

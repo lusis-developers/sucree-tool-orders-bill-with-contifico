@@ -384,7 +384,6 @@ export class ContificoService {
    */
   async getDocuments(options: { fecha_emision?: string; tipo?: string; persona_identificacion?: string;[key: string]: any } = {}) {
     try {
-      console.log("🔍 Fetching documents from Contífico with options:", options);
 
       const params = { ...options };
 
