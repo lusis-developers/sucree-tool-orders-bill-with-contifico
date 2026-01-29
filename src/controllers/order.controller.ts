@@ -48,6 +48,7 @@ export async function createOrder(req: Request, res: Response, next: NextFunctio
     // Calculate totalValue if missing
     if (orderData.totalValue === undefined || orderData.totalValue === null) {
       const calculatedTotal = orderData.products.reduce((sum: number, p: any) => {
+        if (p.isCourtesy) return sum; // Free item
         return sum + (Number(p.price) * Number(p.quantity));
       }, 0);
       orderData.totalValue = calculatedTotal;
