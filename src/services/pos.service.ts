@@ -32,7 +32,7 @@ export class POSService {
       { $sort: { "dispatch.reportedAt": -1 } } // Newest shipments first
     ];
 
-    const shipments = await models.orders.aggregate(pipeline);
+    const shipments = await models.orders.aggregate(pipeline as any);
     return shipments;
   }
 

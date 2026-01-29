@@ -268,6 +268,85 @@ export class ProductionService {
   }
 
   /**
+   * Batch register dispatch for multiple orders.
+   * Assumes full dispatch of remaining items for each order.
+   */
+  async batchRegisterDispatch(ids: string[], reportedBy: string) {
+    let successCount = 0;
+    let failedCount = 0;
+    const errors: any[] = [];
+
+    for (const id of ids) {
+      try {
+        const order = await OrderModel.findById(id);
+        if (!order) continue;
+
+        // Calculate what remains to be sent
+        const dispatchItems = [];
+
+        // Helper to calculate sent
+        const sentMap = new Map<string, number>();
+        if (order.dispatches) {
+          for (const d of order.dispatches) {
+            for (const item of d.items) {
+              const cur = sentMap.get(item.productId) || 0;
+              sentMap.set(item.productId, cur + item.quantitySent);
+            }
+          }
+        }
+
+        for (const product of order.products) {
+          const sent = sentMap.get(product._id!.toString()) || 0;
+          const remaining = product.quantity - sent;
+
+          if (remaining > 0) {
+            dispatchItems.push({
+              productId: product._id,
+              name: product.name,
+              quantitySent: remaining,
+              quantityReceived: 0
+            });
+          }
+        }
+
+        if (dispatchItems.length > 0) {
+          const destination = order.deliveryType === 'delivery'
+            ? 'Delivery'
+            : (order.branch || 'Centro de Producción');
+
+          const newDispatch: any = {
+            reportedAt: new Date(),
+            modifiedAt: new Date(),
+            destination: destination,
+            items: dispatchItems,
+            notes: "Batch Dispatch (Auto)",
+            reportedBy: reportedBy,
+            receptionStatus: "PENDING"
+          };
+
+          order.dispatches.push(newDispatch);
+          this.recalculateDispatchStatus(order);
+          await order.save();
+          successCount++;
+        } else {
+          // Already full, maybe just ensure status is SENT
+          if (order.dispatchStatus !== 'SENT') {
+            order.dispatchStatus = 'SENT';
+            await order.save();
+            successCount++; // Count as handled
+          }
+        }
+
+      } catch (error: any) {
+        failedCount++;
+        errors.push({ id, error: error.message });
+      }
+    }
+
+    return { success: successCount, failed: failedCount, errors };
+  }
+
+  /**
    * Register a new dispatch report for an order.
    */
   async registerDispatch(orderId: string, dispatchData: { destination: string; items: any[]; notes?: string; reportedBy: string }) {
