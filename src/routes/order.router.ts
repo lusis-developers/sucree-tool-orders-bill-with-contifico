@@ -22,6 +22,10 @@ router.put("/:id/invoice", OrderController.updateInvoiceData);
 // POST /api/orders/:id/collection
 router.post("/:id/collection", OrderController.registerCollection);
 
+// POST /api/orders/:id/invoice/generate
+router.post("/:id/invoice/generate", OrderController.generateInvoice);
 
+// GET /api/orders/:id/invoice-pdf
+router.get("/:id/invoice-pdf", OrderController.getInvoicePdf);
 
 export default router;
