@@ -56,7 +56,12 @@ export class ContificoService {
           calcPrice = precio / 1.15;
         }
 
-        const totalLine = cantidad * calcPrice;
+        // Apply Discount Logic (Courtesy = 100%)
+        const discountPercentage = p.isCourtesy ? 100 : 0;
+
+        // Total Line = Qty * Price * (1 - Discount/100)
+        // If 100% discount, totalLine becomes 0, so it doesn't add to the invoice totals
+        const totalLine = cantidad * calcPrice * ((100 - discountPercentage) / 100);
 
         let base_cero = 0;
         let base_gravable = 0;
@@ -85,7 +90,7 @@ export class ContificoService {
           base_cero: base_cero,
           base_gravable: base_gravable,
           base_no_gravable: base_no_gravable,
-          descuento: 0
+          descuento: discountPercentage
         };
       });
 
