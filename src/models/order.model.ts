@@ -79,6 +79,17 @@ export interface IOrder extends Document {
     tipo_ping?: string;
     numero_tarjeta?: string;
   };
+  payments: Array<{
+    forma_cobro: string;
+    monto: number;
+    fecha: Date;
+    numero_comprobante?: string;
+    cuenta_bancaria_id?: string;
+    tipo_ping?: string;
+    numero_tarjeta?: string;
+    reference?: string;
+    status?: string;
+  }>;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -194,7 +205,20 @@ const OrderSchema = new Schema<IOrder>(
       cuenta_bancaria_id: String,
       tipo_ping: String,
       numero_tarjeta: String
-    }
+    },
+    payments: [
+      {
+        forma_cobro: { type: String, required: true },
+        monto: { type: Number, required: true },
+        fecha: { type: Date, default: Date.now },
+        numero_comprobante: String,
+        cuenta_bancaria_id: String,
+        tipo_ping: String,
+        numero_tarjeta: String,
+        reference: String, // Contifico or external reference
+        status: { type: String, enum: ['PENDING', 'PAID', 'ERROR'], default: 'PAID' }
+      }
+    ]
   },
   {
     timestamps: true,
