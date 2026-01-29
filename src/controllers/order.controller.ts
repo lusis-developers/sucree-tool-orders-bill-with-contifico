@@ -45,6 +45,17 @@ export async function createOrder(req: Request, res: Response, next: NextFunctio
     if (!orderData.responsible) orderData.responsible = "Web";
     if (!orderData.paymentMethod) orderData.paymentMethod = "Por confirmar";
 
+    // Initialize payments array if paymentDetails is present
+    if (orderData.paymentDetails && orderData.paymentDetails.monto > 0) {
+      orderData.payments = [{
+        ...orderData.paymentDetails,
+        fecha: new Date(),
+        status: 'PAID'
+      }];
+    } else {
+      orderData.payments = [];
+    }
+
     // Calculate totalValue if missing
     if (orderData.totalValue === undefined || orderData.totalValue === null) {
       const calculatedTotal = orderData.products.reduce((sum: number, p: any) => {
@@ -386,39 +397,69 @@ export async function registerCollection(req: Request, res: Response, next: Next
       return;
     }
 
-    // 2. Always Save Payment Details locally first (for batch processing)
-    if (!order.paymentDetails) {
-      order.paymentDetails = {} as any; // Initialize if missing
+    // 2. Validate Payment Overflows
+    // 2. Validate Payment Overflows
+    const currentPaid = (order.payments || []).reduce((sum, p) => sum + (p.monto || 0), 0);
+    const newAmount = Number(collectionData.monto);
+
+    // SELF-HEALING: If totalValue is 0 (legacy/bug), recalculate from products
+    let effectiveTotal = order.totalValue;
+    if (!effectiveTotal || effectiveTotal === 0) {
+      effectiveTotal = order.products.reduce((sum: number, p: any) => {
+        if (p.isCourtesy) return sum;
+        return sum + (Number(p.price) * Number(p.quantity));
+      }, 0);
+
+      if (effectiveTotal > 0) {
+        order.totalValue = effectiveTotal;
+        // Will be saved below with order.save()
+      }
     }
 
-    // FIX: Resolve Bank ID before saving
+    // Allow small Floating Point tolerance
+    if ((currentPaid + newAmount) > (effectiveTotal + 0.10)) { // 10 cents tolerance
+      res.status(400).send({
+        message: `Payment exceeds total order value. Total: ${effectiveTotal}, Paid: ${currentPaid}, Attempting: ${newAmount}`
+      });
+      return;
+    }
+
+    // 3. Resolve Bank ID
     if (collectionData.cuenta_bancaria_id) {
       collectionData.cuenta_bancaria_id = resolveBankId(collectionData.cuenta_bancaria_id);
     }
 
-    // Merge or overwrite payment details
+    // Update Legacy Field (Last Payment)
+    if (!order.paymentDetails) order.paymentDetails = {} as any;
     order.paymentDetails = {
       ...order.paymentDetails,
       ...collectionData
     };
 
+    // Push to Payments Array
+    if (!order.payments) order.payments = [];
+    order.payments.push({
+      ...collectionData,
+      fecha: new Date(),
+      status: 'PAID'
+    });
+
     // Also update top-level paymentMethod string if coming from UI mapping
     if (collectionData.forma_cobro) {
       // Map code to label for display
       const methodMap: any = { 'TRA': 'Transferencia', 'EF': 'Efectivo', 'TC': 'Tarjeta de Crédito', 'CQ': 'Cheque' };
+      // Only update if it's the first payment or explicit override? 
+      // Let's just update the label to reflect the latest method used.
       order.paymentMethod = methodMap[collectionData.forma_cobro] || order.paymentMethod;
     }
 
     await order.save();
 
-    // 3. Check Invoice Existence
+    // 4. Check Invoice Existence
     const documentId = order.invoiceInfo?.id;
 
     if (!documentId) {
       // Offline/Queued Mode
-      // If invoice is not yet processed, we just save the payment info (done above)
-      // and return success so the UI doesn't error out.
-
       // Ensure invoiceNeeded is true so batch picks it up
       if (!order.invoiceNeeded) {
         order.invoiceNeeded = true;
@@ -427,24 +468,25 @@ export async function registerCollection(req: Request, res: Response, next: Next
       }
 
       res.status(HttpStatusCode.Ok).send({
-        message: "Payment registered locally. Will be synced to Contífico when invoice is generated (Batch Process).",
-        localOnly: true
+        message: "Payment registered locally. Will be synced to Contífico when invoice is generated.",
+        localOnly: true,
+        order
       });
       return;
     }
 
-    // 4. Register Collection in Contífico (Immediate Mode)
-    // Ensure we send the fixed data
+    // 5. Register Collection in Contífico (Immediate Mode)
     const payloadToSend = {
       ...collectionData,
-      cuenta_bancaria_id: resolveBankId(collectionData.cuenta_bancaria_id) // Redundant but safe
+      cuenta_bancaria_id: collectionData.cuenta_bancaria_id
     };
 
     const result = await contificoService.registerCollection(documentId, payloadToSend);
 
     res.status(HttpStatusCode.Created).send({
       message: "Collection registered successfully in Contífico.",
-      result
+      result,
+      order
     });
 
   } catch (error: any) {
