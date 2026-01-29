@@ -499,3 +499,111 @@ export async function registerCollection(req: Request, res: Response, next: Next
 }
 
 
+
+/**
+ * Manually trigger invoice generation for a specific order
+ * POST /api/orders/:id/invoice/generate
+ */
+export async function generateInvoice(req: Request, res: Response, next: NextFunction) {
+  try {
+    const { id } = req.params;
+    const order = await models.orders.findById(id);
+
+    if (!order) {
+      res.status(HttpStatusCode.NotFound).send({ message: "Order not found." });
+      return;
+    }
+
+    if (order.invoiceStatus === "PROCESSED") {
+      res.status(HttpStatusCode.BadRequest).send({ message: "Invoice already processed." });
+      return;
+    }
+
+    if (!order.invoiceNeeded) {
+      order.invoiceNeeded = true;
+    }
+
+    console.log(`🚀 Manual Invoice Generation triggered for ${id}`);
+
+    // Create Invoice
+    const invoiceResponse = await contificoService.createInvoice(order);
+
+    if (invoiceResponse.error) {
+      const msg = typeof invoiceResponse.error === 'object' ? JSON.stringify(invoiceResponse.error) : String(invoiceResponse.error);
+      throw new Error(msg);
+    }
+
+    // Update Order
+    order.invoiceStatus = "PROCESSED";
+    order.invoiceInfo = invoiceResponse;
+    await order.save();
+
+    // Trigger SRI (Non-blocking)
+    contificoService.sendToSri(invoiceResponse.id).catch(err => console.error("SRI Error:", err));
+
+    // Auto-Register Collection if exists
+    if (order.paymentDetails && order.paymentDetails.monto) {
+      try {
+        const collectionPayload = {
+          ...order.paymentDetails,
+          monto: invoiceResponse.total,
+          cuenta_bancaria_id: resolveBankId(order.paymentDetails.cuenta_bancaria_id)
+        };
+        await contificoService.registerCollection(invoiceResponse.id, collectionPayload);
+      } catch (err) {
+        console.error("Auto-collection error:", err);
+      }
+    }
+
+    res.status(HttpStatusCode.Ok).send({
+      message: "Invoice generated successfully.",
+      order
+    });
+    return;
+
+  } catch (error: any) {
+    console.error("Error generating invoice:", error);
+
+    try {
+      await models.orders.findByIdAndUpdate(req.params.id, { invoiceStatus: 'ERROR' });
+    } catch (e) { }
+
+    res.status(HttpStatusCode.InternalServerError).send({
+      message: "Failed to generate invoice.",
+      error: error.message || String(error)
+    });
+    return;
+  }
+}
+
+/**
+ * Get Invoice PDF Link
+ * GET /api/orders/:id/invoice-pdf
+ */
+export async function getInvoicePdf(req: Request, res: Response, next: NextFunction) {
+  try {
+    const { id } = req.params;
+    const order = await models.orders.findById(id);
+
+    if (!order || !order.invoiceInfo?.id) {
+      res.status(HttpStatusCode.NotFound).send({ message: "Invoice not found for this order." });
+      return;
+    }
+
+    const doc = await contificoService.getDocument(order.invoiceInfo.id);
+
+    res.status(HttpStatusCode.Ok).send({
+      message: "Invoice retrieved",
+      document: doc
+    });
+    return;
+
+  } catch (error: any) {
+    console.error("Error fetching invoice PDF:", error);
+    res.status(HttpStatusCode.InternalServerError).send({
+      message: "Failed to fetch invoice PDF",
+      error: error.message
+    });
+    return;
+  }
+}
