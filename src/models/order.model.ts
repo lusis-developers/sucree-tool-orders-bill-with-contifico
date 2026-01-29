@@ -9,6 +9,7 @@ export interface IOrderProduct {
   produced?: number; // Track how many items have been produced
   productionStatus?: "PENDING" | "IN_PROCESS" | "COMPLETED";
   productionNotes?: string;
+  isCourtesy?: boolean;
 }
 
 export interface IDispatchItem {
@@ -129,7 +130,8 @@ const OrderSchema = new Schema<IOrder>(
           enum: ["PENDING", "IN_PROCESS", "COMPLETED"],
           default: "PENDING"
         },
-        productionNotes: { type: String }
+        productionNotes: { type: String },
+        isCourtesy: { type: Boolean, default: false }
       },
     ],
     deliveryType: {
