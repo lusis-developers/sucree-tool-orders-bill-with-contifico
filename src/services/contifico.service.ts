@@ -405,6 +405,24 @@ export class ContificoService {
       throw new Error("Failed to fetch documents from Contífico");
     }
   }
+
+  /**
+   * Get specific document by ID
+   * @param id Document ID
+   */
+  async getDocument(id: string) {
+    try {
+      console.log(`🔍 Fetching document ${id} from Contífico...`);
+      const response = await axios.get(`${this.baseUrl}/documento/${id}/`, {
+        headers: { Authorization: this.apiKey }
+      });
+      return response.data;
+    } catch (error: any) {
+      console.error("❌ Error fetching document from Contífico:", error.response?.data || error.message);
+      throw new Error(error.response?.data?.mensaje || "Failed to fetch document");
+    }
+  }
+
   /**
    * Get Cajas (Cash Registers)
    */
