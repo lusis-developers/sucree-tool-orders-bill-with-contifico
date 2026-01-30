@@ -773,4 +773,32 @@ export class ProductionService {
 
     return results;
   }
+  async voidOrder(orderId: string) {
+    const order = await OrderModel.findById(orderId);
+    if (!order) throw new Error("Order not found");
+
+    order.productionStage = "VOID";
+    order.voidedAt = new Date();
+    return await order.save();
+  }
+
+  async restoreOrder(orderId: string) {
+    const order = await OrderModel.findById(orderId);
+    if (!order) throw new Error("Order not found");
+
+    // 1-Hour Constraint Check
+    if (order.productionStage === 'VOID' && order.voidedAt) {
+      const now = new Date().getTime();
+      const voidTime = new Date(order.voidedAt).getTime();
+      const diffHours = (now - voidTime) / (1000 * 60 * 60);
+
+      if (diffHours > 1) {
+        throw new Error("Time limit exceeded. Voided orders can only be restored within 1 hour.");
+      }
+    }
+
+    order.productionStage = "PENDING";
+    order.voidedAt = null; // Clear timestamp
+    return await order.save();
+  }
 }

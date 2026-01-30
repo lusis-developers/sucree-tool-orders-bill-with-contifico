@@ -185,3 +185,24 @@ export async function registerProgress(req: Request, res: Response) {
     res.status(HttpStatusCode.InternalServerError).send({ message: "Failed", error: error.message });
   }
 }
+
+export async function voidOrder(req: Request, res: Response) {
+  try {
+    const { id } = req.params;
+    const result = await productionService.voidOrder(id);
+    res.status(HttpStatusCode.Ok).send({ message: "Order voided", data: result });
+  } catch (error: any) {
+    res.status(HttpStatusCode.InternalServerError).send({ message: "Failed", error: error.message });
+  }
+}
+
+export async function restoreOrder(req: Request, res: Response) {
+  try {
+    const { id } = req.params;
+    const result = await productionService.restoreOrder(id);
+    res.status(HttpStatusCode.Ok).send({ message: "Order restored", data: result });
+  } catch (error: any) {
+    const status = error.message.includes("Time limit") ? HttpStatusCode.Forbidden : HttpStatusCode.InternalServerError;
+    res.status(status).send({ message: "Failed", error: error.message });
+  }
+}

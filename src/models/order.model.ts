@@ -185,10 +185,11 @@ const OrderSchema = new Schema<IOrder>(
     // Production Fields
     productionStage: {
       type: String,
-      enum: ["PENDING", "IN_PROCESS", "FINISHED", "DELAYED"],
+      enum: ["PENDING", "IN_PROCESS", "FINISHED", "DELAYED", "VOID"],
       default: "PENDING"
     },
     productionNotes: { type: String, default: "" },
+    voidedAt: { type: Date, default: null },
 
     // Dispatch Fields
     dispatches: { type: [DispatchSchema], default: [] },
