@@ -63,8 +63,9 @@ export interface IOrder extends Document {
   };
   invoiceStatus?: "PENDING" | "PROCESSED" | "ERROR";
   invoiceInfo?: any;
-  productionStage: "PENDING" | "IN_PROCESS" | "FINISHED" | "DELAYED";
+  productionStage: "PENDING" | "IN_PROCESS" | "FINISHED" | "DELAYED" | "VOID";
   productionNotes: string;
+  voidedAt: Date | null;
 
   // Dispatch Fields
   dispatches: IDispatch[];
