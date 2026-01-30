@@ -188,6 +188,22 @@ export class ContificoService {
     }
   }
 
+  async getCategories() {
+    try {
+      console.log("🔍 Fetching categories from Contífico...");
+      const response = await axios.get(`${this.baseUrl}/categoria/`, {
+        headers: {
+          Authorization: this.apiKey,
+        },
+      });
+      console.log(response.data)
+      return response.data;
+    } catch (error: any) {
+      console.error("❌ Error fetching categories from Contífico:", error.response?.data || error.message);
+      throw new Error("Failed to fetch categories from Contífico");
+    }
+  }
+
   /**
    * Get person from Contífico (Search by ID or Name)
    * @param query Search query (RUC, Cedula, or Name)

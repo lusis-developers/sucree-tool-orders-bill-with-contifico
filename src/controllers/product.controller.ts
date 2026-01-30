@@ -1,5 +1,6 @@
 import type { Request, Response, NextFunction } from "express";
 import { ContificoService } from "../services/contifico.service";
+import { HttpStatusCode } from "axios";
 
 const contificoService = new ContificoService();
 
@@ -28,3 +29,19 @@ export async function getProducts(req: Request, res: Response, next: NextFunctio
     return;
   }
 }
+
+
+export async function getCategories(req: Request, res: Response, next: NextFunction) {
+  try {
+    const categories = await contificoService.getCategories();
+    res.status(HttpStatusCode.Ok).send(categories);
+    return;
+  } catch (error) {
+    console.error("❌ Error in getCategories:", error);
+    res.status(HttpStatusCode.InternalServerError).send({
+      message: "Internal server error occurred while fetching categories.",
+      error: error instanceof Error ? error.message : String(error)
+    });
+    return;
+  }
+} 

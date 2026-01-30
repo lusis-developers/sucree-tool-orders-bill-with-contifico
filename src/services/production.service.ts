@@ -62,6 +62,48 @@ export class ProductionService {
   }
 
   async getAggregatedItems() {
+    // 0. Fetch Contifico Data (Categories & Products) for mapping
+    // Ideally cached, but for now we fetch fresh or assume efficient enough
+    const contificoService = new (require("./contifico.service").ContificoService)();
+
+    let categoryMap = new Map<string, string>(); // CatID -> CatName
+    let productCategoryMap = new Map<string, string>(); // ProdID -> CatName (or ProdName -> CatName if ID not sync)
+
+    try {
+      // Parallel Fetch
+      const [categories, products] = await Promise.all([
+        contificoService.getCategories(),
+        contificoService.getProducts({ result_size: 2000 }) // Ensure we get enough
+      ]);
+
+      if (categories) {
+        categories.forEach((c: any) => {
+          categoryMap.set(c.id, c.nombre);
+        });
+      }
+
+      // Map Products to Category Names based on Contifico ID
+      // We might not have Contifico ID in OrderProduct, so we might need fallback to Name match
+      // But OrderProduct has 'contifico_id' field!
+      if (products) {
+        products.forEach((p: any) => {
+          // Map by Contifico ID
+          if (p.id) {
+            const cName = categoryMap.get(p.categoria_id) || "OTROS";
+            productCategoryMap.set(p.id, cName);
+          }
+          // Fallback: Map by Name (if local DB items don't have contifico_id populated)
+          if (p.nombre) {
+            const cName = categoryMap.get(p.categoria_id) || "OTROS";
+            productCategoryMap.set(p.nombre.toLowerCase().trim(), cName);
+          }
+        });
+      }
+
+    } catch (err) {
+      console.warn("⚠️ Failed to fetch Contifico metadata for categorization:", err);
+    }
+
     // 1. Fetch flattened list of all pending items
     const rawItems = await OrderModel.aggregate([
       {
@@ -94,6 +136,7 @@ export class ProductionService {
         $project: {
           // Flatten structure for easier JS processing
           productName: "$products.name",
+          contificoId: "$products.contifico_id",
           totalInOrder: "$products.quantity",
           producedInOrder: "$products.produced",
           pendingInOrder: "$pendingQuantity",
@@ -115,7 +158,70 @@ export class ProductionService {
     const tomorrowEnd = new Date(todayEnd);
     tomorrowEnd.setDate(tomorrowEnd.getDate() + 1);
 
-    // 3. Helper to group by Product Name within a bucket
+    // 3. Mapping & Filtering Logic
+    const ALLOWED_CATEGORIES = [
+      'cakes enteros',
+      'cakes porcion',
+      'pack de turrones',
+      'panetton',
+      'secos market',
+      'individual',
+      'panaderais'
+    ];
+
+    // Helper to map Contifico Name to User Category
+    // This is the core "Business Logic" translation
+    const mapCategory = (contificoName: string, productName: string): string | null => {
+      const c = contificoName.toUpperCase();
+      const p = productName.toUpperCase();
+
+      if (c.includes('ENTEROS') || c.includes('TORTAS')) return 'cakes enteros';
+      if (c.includes('PANADERIA')) return 'panaderais'; // Assuming user meant 'panaderia' but typed 'panaderais'
+
+      // "Individual" logic - tricky. Maybe POSTRES?
+      if (c.includes('POSTRES') || c.includes('INDIVIDUAL')) return 'individual'; // or 'cakes porcion' depending on item?
+
+      // Specific Product overrides if Category is generic
+      if (p.includes('TURRON')) return 'pack de turrones';
+      if (p.includes('PANETTON')) return 'panetton';
+      if (p.includes('SECOS') || p.includes('MARKET')) return 'secos market';
+      if (p.includes('PORCION')) return 'cakes porcion';
+
+      // Default mappings if generic
+      if (c === 'COMBOS') return null; // Exclude?
+
+      return null; // Exclude by default if not matched
+    };
+
+    const processedItems: any[] = [];
+
+    for (const item of rawItems) {
+      // Determine Category
+      // 1. By Contifico ID
+      let rawCat = "OTROS";
+      if (item.contificoId && productCategoryMap.has(item.contificoId)) {
+        rawCat = productCategoryMap.get(item.contificoId)!;
+      } else if (productCategoryMap.has(item.productName.toLowerCase().trim())) {
+        // 2. By Name
+        rawCat = productCategoryMap.get(item.productName.toLowerCase().trim())!;
+      }
+
+      const mappedCat = mapCategory(rawCat, item.productName);
+
+      if (mappedCat) {
+        item.category = mappedCat;
+        processedItems.push(item);
+      }
+    }
+
+    // 4. Helper to group by Product Name within a bucket
+    // Now grouped by Category -> Product Name?
+    // The frontend expects: { today: [...items], tomorrow: ... }
+    // Users wants visual grouping by category. The frontend handles grouping if 'category' field exists.
+
+    // We stick to the existing structure of returning List<ItemSummary>, 
+    // but now we filter and enrich with 'category'.
+
     const groupItems = (items: any[]) => {
       const groupedMap = new Map<string, any>();
 
@@ -123,8 +229,9 @@ export class ProductionService {
         if (!groupedMap.has(item.productName)) {
           groupedMap.set(item.productName, {
             _id: item.productName,
+            category: item.category, // Pass the category!
             totalQuantity: 0,
-            urgency: item.deliveryDate, // First one is earliest due to sort
+            urgency: item.deliveryDate,
             orders: []
           });
         }
@@ -146,14 +253,14 @@ export class ProductionService {
       return Array.from(groupedMap.values());
     };
 
-    // 4. Distribute items into buckets
+    // 5. Distribute items into buckets
     const buckets = {
       todayItems: [] as any[],
       tomorrowItems: [] as any[],
       futureItems: [] as any[]
     };
 
-    for (const item of rawItems) {
+    for (const item of processedItems) {
       const uDate = new Date(item.deliveryDate);
 
       if (uDate <= todayEnd) {
@@ -165,7 +272,7 @@ export class ProductionService {
       }
     }
 
-    // 5. Group and Return
+    // 6. Return
     return {
       today: groupItems(buckets.todayItems),
       tomorrow: groupItems(buckets.tomorrowItems),
