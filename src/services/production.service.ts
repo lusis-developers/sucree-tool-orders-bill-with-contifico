@@ -32,11 +32,25 @@ export class ProductionService {
    * Useful for the tabular list view.
    */
   async getAllOrders() {
-    // FIX: Include "FINISHED" orders that haven't been dispatched yet.
     // We want all active orders where the lifecycle (Dispatch) isn't complete.
-    return await OrderModel.find({
+    const orders = await OrderModel.find({
       dispatchStatus: { $ne: "SENT" }
     }).sort({ deliveryDate: 1 });
+
+    // FIX: Auto-repair productionStage if inconsistent
+    // If all products are fully produced but stage is PENDING/IN_PROCESS, mark as FINISHED
+    // This solves the "disappearing orders" issue where items are 1/1 done but stage is stuck.
+    for (const order of orders) {
+      if (order.productionStage !== "FINISHED" && order.productionStage !== "VOID") {
+        const allDone = order.products.every(p => (p.produced || 0) >= p.quantity);
+        if (allDone && order.products.length > 0) {
+          order.productionStage = "FINISHED";
+          await order.save();
+        }
+      }
+    }
+
+    return orders;
   }
 
   async updateTask(id: string, updates: { stage?: string; notes?: string }) {
@@ -782,6 +796,26 @@ export class ProductionService {
     return await order.save();
   }
 
+  /**
+   * Reverts a FINISHED order back to PENDING.
+   * Resets all production progress for the items in the order.
+   */
+  async revertOrder(orderId: string) {
+    const order = await OrderModel.findById(orderId);
+    if (!order) throw new Error("Order not found");
+
+    order.productionStage = "PENDING";
+
+    // Reset all products to starting state
+    order.products.forEach(p => {
+      p.produced = 0;
+      p.productionStatus = "PENDING";
+    });
+
+    order.markModified('products');
+    return await order.save();
+  }
+
   async restoreOrder(orderId: string) {
     const order = await OrderModel.findById(orderId);
     if (!order) throw new Error("Order not found");
@@ -799,6 +833,14 @@ export class ProductionService {
 
     order.productionStage = "PENDING";
     order.voidedAt = null; // Clear timestamp
+
+    // Reset product progress when restoring a voided order
+    order.products.forEach(p => {
+      p.produced = 0;
+      p.productionStatus = "PENDING";
+    });
+    order.markModified('products');
+
     return await order.save();
   }
 }

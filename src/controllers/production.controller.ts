@@ -196,6 +196,16 @@ export async function voidOrder(req: Request, res: Response) {
   }
 }
 
+export async function revertOrder(req: Request, res: Response) {
+  try {
+    const { id } = req.params;
+    const result = await productionService.revertOrder(id);
+    res.status(HttpStatusCode.Ok).send({ message: "Order reverted to production", data: result });
+  } catch (error: any) {
+    res.status(HttpStatusCode.InternalServerError).send({ message: "Failed", error: error.message });
+  }
+}
+
 export async function restoreOrder(req: Request, res: Response) {
   try {
     const { id } = req.params;
