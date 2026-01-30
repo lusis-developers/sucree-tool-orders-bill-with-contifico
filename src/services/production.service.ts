@@ -165,12 +165,16 @@ export class ProductionService {
       { $sort: { deliveryDate: 1 } }
     ]);
 
-    // 2. Define Time Buckets
-    const todayEnd = new Date();
-    todayEnd.setHours(23, 59, 59, 999);
+    // 2. Define Time Buckets (normalized to Ecuador UTC-5)
+    const now = new Date();
+    const ecNow = new Date(now.getTime() - (5 * 3600 * 1000));
 
-    const tomorrowEnd = new Date(todayEnd);
-    tomorrowEnd.setDate(tomorrowEnd.getDate() + 1);
+    const toDayStr = (d: Date) => d.toISOString().split('T')[0];
+    const todayStr = toDayStr(ecNow);
+
+    const tomorrowDate = new Date(ecNow);
+    tomorrowDate.setDate(tomorrowDate.getDate() + 1);
+    const tomorrowStr = toDayStr(tomorrowDate);
 
     // 3. Mapping & Filtering Logic
     const ALLOWED_CATEGORIES = [
@@ -276,10 +280,11 @@ export class ProductionService {
 
     for (const item of processedItems) {
       const uDate = new Date(item.deliveryDate);
+      const itemDayStr = toDayStr(uDate);
 
-      if (uDate <= todayEnd) {
+      if (itemDayStr <= todayStr) {
         buckets.todayItems.push(item);
-      } else if (uDate <= tomorrowEnd) {
+      } else if (itemDayStr <= tomorrowStr) {
         buckets.tomorrowItems.push(item);
       } else {
         buckets.futureItems.push(item);
@@ -524,22 +529,29 @@ export class ProductionService {
 
   async getReportsStats(range: 'today' | 'week') {
     const now = new Date();
-    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const ecNow = new Date(now.getTime() - (5 * 3600 * 1000));
+    const y = ecNow.getUTCFullYear();
+    const m = ecNow.getUTCMonth();
+    const d = ecNow.getUTCDate();
 
     let query: any = {};
 
     if (range === 'today') {
-      const tomorrow = new Date(today);
-      tomorrow.setDate(tomorrow.getDate() + 1);
       query = {
-        deliveryDate: { $gte: today, $lt: tomorrow }
+        deliveryDate: {
+          $gte: new Date(Date.UTC(y, m, d, 0, 0, 0, 0)),
+          $lte: new Date(Date.UTC(y, m, d, 23, 59, 59, 999))
+        }
       };
     } else {
-      // Next 7 Days
-      const nextWeek = new Date(today);
-      nextWeek.setDate(nextWeek.getDate() + 7);
+      // Next 7 Days from EC Today
+      const start = new Date(Date.UTC(y, m, d, 0, 0, 0, 0));
+      const end = new Date(start);
+      end.setUTCDate(end.getUTCDate() + 7);
+      end.setUTCHours(23, 59, 59, 999);
+
       query = {
-        deliveryDate: { $gte: today, $lt: nextWeek }
+        deliveryDate: { $gte: start, $lte: end }
       };
     }
 
