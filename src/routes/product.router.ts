@@ -6,4 +6,6 @@ const router = express.Router();
 // GET /api/products
 router.get("/", ProductController.getProducts);
 
+router.get("/categories", ProductController.getCategories);
+
 export default router;
