@@ -144,16 +144,75 @@ Link Maps: ${orderData.googleMapsLink || 'N/A'}
 }
 
 /**
- * Get all orders
+ * Get all orders with optional filtering
  */
 export async function getOrders(req: Request, res: Response, next: NextFunction) {
   try {
-    const orders = await models.orders.find().sort({ createdAt: -1 }).limit(100);
-    res.status(200).send(orders);
+    const { search, startDate, endDate } = req.query;
+    const query: any = {};
+
+    // 1. Search Filter (Name, RUC, Email)
+    if (search) {
+      const searchRegex = new RegExp(String(search), 'i');
+      query.$or = [
+        { customerName: searchRegex },
+        { "invoiceData.ruc": searchRegex },
+        { "invoiceData.email": searchRegex }
+      ];
+    }
+
+    // 2. Date Filter (deliveryDate or createdAt)
+    if (startDate || endDate) {
+      const dateField = req.query.dateType === 'createdAt' ? 'createdAt' : 'deliveryDate';
+      query[dateField] = {};
+
+      if (startDate) {
+        const s = String(startDate);
+        if (/^\d{4}-\d{2}-\d{2}$/.test(s)) {
+          const [y, m, d] = s.split('-').map(Number);
+          // If we are filtering by deliveryDate, we use UTC boundaries to match UTC midnight storage
+          if (dateField === 'deliveryDate') {
+            query[dateField].$gte = new Date(Date.UTC(y, m - 1, d, 0, 0, 0, 0));
+          } else {
+            query[dateField].$gte = new Date(y, m - 1, d, 0, 0, 0, 0);
+          }
+        } else {
+          query[dateField].$gte = new Date(s);
+        }
+      }
+      if (endDate) {
+        const e = String(endDate);
+        if (/^\d{4}-\d{2}-\d{2}$/.test(e)) {
+          const [y, m, d] = e.split('-').map(Number);
+          if (dateField === 'deliveryDate') {
+            query[dateField].$lte = new Date(Date.UTC(y, m - 1, d, 23, 59, 59, 999));
+          } else {
+            query[dateField].$lte = new Date(y, m - 1, d, 23, 59, 59, 999);
+          }
+        } else {
+          const eDate = new Date(e);
+          eDate.setHours(23, 59, 59, 999);
+          query[dateField].$lte = eDate;
+        }
+      }
+    }
+
+    // 3. Execution
+    // If we have filters, we might want to return more than 100, or just default to a larger number.
+    // For now, let's keep a limit but make it larger if searching.
+    const limit = (search || startDate || endDate) ? 500 : 100;
+    const sortField = req.query.dateType === 'createdAt' ? 'createdAt' : 'deliveryDate';
+
+    const orders = await models.orders
+      .find(query)
+      .sort({ [sortField]: -1, createdAt: -1 }) // Sort by selected date field primarily
+      .limit(limit);
+
+    res.status(HttpStatusCode.Ok).send(orders);
     return;
   } catch (error) {
     console.error("❌ Error in getOrders:", error);
-    res.status(500).send({
+    res.status(HttpStatusCode.InternalServerError).send({
       message: "Internal server error while fetching orders.",
       error: error instanceof Error ? error.message : String(error)
     });
