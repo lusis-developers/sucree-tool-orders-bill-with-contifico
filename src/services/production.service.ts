@@ -32,9 +32,20 @@ export class ProductionService {
    * Useful for the tabular list view.
    */
   async getAllOrders() {
-    // We want all active orders where the lifecycle (Dispatch) isn't complete.
+    // We want all active orders where the lifecycle (Dispatch) isn't complete,
+    // OR orders that WERE dispatched recently (e.g., in the last 7 days) to show in the history/sent sections.
+    const sevenDaysAgo = new Date();
+    sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+    sevenDaysAgo.setHours(0, 0, 0, 0);
+
     const orders = await OrderModel.find({
-      dispatchStatus: { $ne: "SENT" }
+      $or: [
+        { dispatchStatus: { $ne: "SENT" } },
+        {
+          dispatchStatus: "SENT",
+          deliveryDate: { $gte: sevenDaysAgo }
+        }
+      ]
     }).sort({ deliveryDate: 1 });
 
     // FIX: Auto-repair productionStage if inconsistent
@@ -859,6 +870,25 @@ export class ProductionService {
       p.productionStatus = "PENDING";
     });
     order.markModified('products');
+
+    return await order.save();
+  }
+
+  /**
+   * Marks an order as returned.
+   * Resets dispatchStatus to NOT_SENT but keeps production status (since it's already made).
+   * Appends a record to the notes.
+   */
+  async returnOrder(orderId: string, returnData: { notes: string; reportedBy: string }) {
+    const order = await OrderModel.findById(orderId);
+    if (!order) throw new Error("Order not found");
+
+    // Reset dispatch status so it moves back to "Pending Dispatch" 
+    // but keep productionStage as FINISHED/COMPLETED
+    order.dispatchStatus = "NOT_SENT";
+
+    const returnLog = `\n[DEVOLUCIÓN ${new Date().toLocaleString('es-EC')} por ${returnData.reportedBy}]: ${returnData.notes}`;
+    order.comments = (order.comments || "") + returnLog;
 
     return await order.save();
   }

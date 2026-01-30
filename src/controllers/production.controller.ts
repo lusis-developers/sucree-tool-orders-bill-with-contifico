@@ -216,3 +216,18 @@ export async function restoreOrder(req: Request, res: Response) {
     res.status(status).send({ message: "Failed", error: error.message });
   }
 }
+export async function returnOrder(req: Request, res: Response) {
+  try {
+    const { id } = req.params;
+    const { notes, reportedBy } = req.body;
+
+    if (!notes) {
+      return res.status(HttpStatusCode.BadRequest).send({ message: "Return notes are required." });
+    }
+
+    const result = await productionService.returnOrder(id, { notes, reportedBy: reportedBy || "Producción" });
+    res.status(HttpStatusCode.Ok).send({ message: "Order marked as returned", data: result });
+  } catch (error: any) {
+    res.status(HttpStatusCode.InternalServerError).send({ message: "Failed", error: error.message });
+  }
+}
