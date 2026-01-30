@@ -188,27 +188,34 @@ export class ProductionService {
     ];
 
     // Helper to map Contifico Name to User Category
-    // This is the core "Business Logic" translation
     const mapCategory = (contificoName: string, productName: string): string | null => {
       const c = contificoName.toUpperCase();
       const p = productName.toUpperCase();
 
+      // Exclude generic packaging/delivery/service items that are not "Produced"
+      const EXCLUDE_PRODS = [
+        'DELIVERY', 'FUNDA', 'VASO', 'TAPA', 'CUCHARA', 'TENEDOR', 'CUCHILLO',
+        'SERVILLET', 'TUPPER', 'TAZON', 'TAZÓN', 'CEPO', 'LOGISTICA'
+      ];
+
+      if (EXCLUDE_PRODS.some(keyword => p.includes(keyword))) {
+        return null;
+      }
+
       if (c.includes('ENTEROS') || c.includes('TORTAS')) return 'cakes enteros';
-      if (c.includes('PANADERIA')) return 'panaderais'; // Assuming user meant 'panaderia' but typed 'panaderais'
+      if (c.includes('PANADERIA')) return 'panaderais';
+      if (c.includes('POSTRES') || c.includes('INDIVIDUAL')) return 'individual';
 
-      // "Individual" logic - tricky. Maybe POSTRES?
-      if (c.includes('POSTRES') || c.includes('INDIVIDUAL')) return 'individual'; // or 'cakes porcion' depending on item?
-
-      // Specific Product overrides if Category is generic
+      // Specific Product overrides
       if (p.includes('TURRON')) return 'pack de turrones';
       if (p.includes('PANETTON')) return 'panetton';
       if (p.includes('SECOS') || p.includes('MARKET')) return 'secos market';
       if (p.includes('PORCION')) return 'cakes porcion';
 
-      // Default mappings if generic
-      if (c === 'COMBOS') return null; // Exclude?
+      // If it reaches here and it's not a Combo or generic service, mark as 'Otros'
+      if (c === 'COMBOS' && !p.includes('DEGUSTA')) return null; // Only keep Degustación from Combos
 
-      return null; // Exclude by default if not matched
+      return 'Otros';
     };
 
     const processedItems: any[] = [];
