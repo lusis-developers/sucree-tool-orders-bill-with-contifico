@@ -63,8 +63,9 @@ export interface IOrder extends Document {
   };
   invoiceStatus?: "PENDING" | "PROCESSED" | "ERROR";
   invoiceInfo?: any;
-  productionStage: "PENDING" | "IN_PROCESS" | "FINISHED" | "DELAYED";
+  productionStage: "PENDING" | "IN_PROCESS" | "FINISHED" | "DELAYED" | "VOID";
   productionNotes: string;
+  voidedAt: Date | null;
 
   // Dispatch Fields
   dispatches: IDispatch[];
@@ -185,10 +186,11 @@ const OrderSchema = new Schema<IOrder>(
     // Production Fields
     productionStage: {
       type: String,
-      enum: ["PENDING", "IN_PROCESS", "FINISHED", "DELAYED"],
+      enum: ["PENDING", "IN_PROCESS", "FINISHED", "DELAYED", "VOID"],
       default: "PENDING"
     },
     productionNotes: { type: String, default: "" },
+    voidedAt: { type: Date, default: null },
 
     // Dispatch Fields
     dispatches: { type: [DispatchSchema], default: [] },

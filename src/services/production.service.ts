@@ -32,11 +32,36 @@ export class ProductionService {
    * Useful for the tabular list view.
    */
   async getAllOrders() {
-    // FIX: Include "FINISHED" orders that haven't been dispatched yet.
-    // We want all active orders where the lifecycle (Dispatch) isn't complete.
-    return await OrderModel.find({
-      dispatchStatus: { $ne: "SENT" }
+    // We want all active orders where the lifecycle (Dispatch) isn't complete,
+    // OR orders that WERE dispatched recently (e.g., in the last 7 days) to show in the history/sent sections.
+    const sevenDaysAgo = new Date();
+    sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+    sevenDaysAgo.setHours(0, 0, 0, 0);
+
+    const orders = await OrderModel.find({
+      $or: [
+        { dispatchStatus: { $ne: "SENT" } },
+        {
+          dispatchStatus: "SENT",
+          deliveryDate: { $gte: sevenDaysAgo }
+        }
+      ]
     }).sort({ deliveryDate: 1 });
+
+    // FIX: Auto-repair productionStage if inconsistent
+    // If all products are fully produced but stage is PENDING/IN_PROCESS, mark as FINISHED
+    // This solves the "disappearing orders" issue where items are 1/1 done but stage is stuck.
+    for (const order of orders) {
+      if (order.productionStage !== "FINISHED" && order.productionStage !== "VOID") {
+        const allDone = order.products.every(p => (p.produced || 0) >= p.quantity);
+        if (allDone && order.products.length > 0) {
+          order.productionStage = "FINISHED";
+          await order.save();
+        }
+      }
+    }
+
+    return orders;
   }
 
   async updateTask(id: string, updates: { stage?: string; notes?: string }) {
@@ -151,12 +176,16 @@ export class ProductionService {
       { $sort: { deliveryDate: 1 } }
     ]);
 
-    // 2. Define Time Buckets
-    const todayEnd = new Date();
-    todayEnd.setHours(23, 59, 59, 999);
+    // 2. Define Time Buckets (normalized to Ecuador UTC-5)
+    const now = new Date();
+    const ecNow = new Date(now.getTime() - (5 * 3600 * 1000));
 
-    const tomorrowEnd = new Date(todayEnd);
-    tomorrowEnd.setDate(tomorrowEnd.getDate() + 1);
+    const toDayStr = (d: Date) => d.toISOString().split('T')[0];
+    const todayStr = toDayStr(ecNow);
+
+    const tomorrowDate = new Date(ecNow);
+    tomorrowDate.setDate(tomorrowDate.getDate() + 1);
+    const tomorrowStr = toDayStr(tomorrowDate);
 
     // 3. Mapping & Filtering Logic
     const ALLOWED_CATEGORIES = [
@@ -170,27 +199,34 @@ export class ProductionService {
     ];
 
     // Helper to map Contifico Name to User Category
-    // This is the core "Business Logic" translation
     const mapCategory = (contificoName: string, productName: string): string | null => {
       const c = contificoName.toUpperCase();
       const p = productName.toUpperCase();
 
+      // Exclude generic packaging/delivery/service items that are not "Produced"
+      const EXCLUDE_PRODS = [
+        'DELIVERY', 'FUNDA', 'VASO', 'TAPA', 'CUCHARA', 'TENEDOR', 'CUCHILLO',
+        'SERVILLET', 'TUPPER', 'TAZON', 'TAZÓN', 'CEPO', 'LOGISTICA'
+      ];
+
+      if (EXCLUDE_PRODS.some(keyword => p.includes(keyword))) {
+        return null;
+      }
+
       if (c.includes('ENTEROS') || c.includes('TORTAS')) return 'cakes enteros';
-      if (c.includes('PANADERIA')) return 'panaderais'; // Assuming user meant 'panaderia' but typed 'panaderais'
+      if (c.includes('PANADERIA')) return 'panaderais';
+      if (c.includes('POSTRES') || c.includes('INDIVIDUAL')) return 'individual';
 
-      // "Individual" logic - tricky. Maybe POSTRES?
-      if (c.includes('POSTRES') || c.includes('INDIVIDUAL')) return 'individual'; // or 'cakes porcion' depending on item?
-
-      // Specific Product overrides if Category is generic
+      // Specific Product overrides
       if (p.includes('TURRON')) return 'pack de turrones';
       if (p.includes('PANETTON')) return 'panetton';
       if (p.includes('SECOS') || p.includes('MARKET')) return 'secos market';
       if (p.includes('PORCION')) return 'cakes porcion';
 
-      // Default mappings if generic
-      if (c === 'COMBOS') return null; // Exclude?
+      // If it reaches here and it's not a Combo or generic service, mark as 'Otros'
+      if (c === 'COMBOS' && !p.includes('DEGUSTA')) return null; // Only keep Degustación from Combos
 
-      return null; // Exclude by default if not matched
+      return 'Otros';
     };
 
     const processedItems: any[] = [];
@@ -262,10 +298,11 @@ export class ProductionService {
 
     for (const item of processedItems) {
       const uDate = new Date(item.deliveryDate);
+      const itemDayStr = toDayStr(uDate);
 
-      if (uDate <= todayEnd) {
+      if (itemDayStr <= todayStr) {
         buckets.todayItems.push(item);
-      } else if (uDate <= tomorrowEnd) {
+      } else if (itemDayStr <= tomorrowStr) {
         buckets.tomorrowItems.push(item);
       } else {
         buckets.futureItems.push(item);
@@ -510,22 +547,29 @@ export class ProductionService {
 
   async getReportsStats(range: 'today' | 'week') {
     const now = new Date();
-    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const ecNow = new Date(now.getTime() - (5 * 3600 * 1000));
+    const y = ecNow.getUTCFullYear();
+    const m = ecNow.getUTCMonth();
+    const d = ecNow.getUTCDate();
 
     let query: any = {};
 
     if (range === 'today') {
-      const tomorrow = new Date(today);
-      tomorrow.setDate(tomorrow.getDate() + 1);
       query = {
-        deliveryDate: { $gte: today, $lt: tomorrow }
+        deliveryDate: {
+          $gte: new Date(Date.UTC(y, m, d, 0, 0, 0, 0)),
+          $lte: new Date(Date.UTC(y, m, d, 23, 59, 59, 999))
+        }
       };
     } else {
-      // Next 7 Days
-      const nextWeek = new Date(today);
-      nextWeek.setDate(nextWeek.getDate() + 7);
+      // Next 7 Days from EC Today
+      const start = new Date(Date.UTC(y, m, d, 0, 0, 0, 0));
+      const end = new Date(start);
+      end.setUTCDate(end.getUTCDate() + 7);
+      end.setUTCHours(23, 59, 59, 999);
+
       query = {
-        deliveryDate: { $gte: today, $lt: nextWeek }
+        deliveryDate: { $gte: start, $lte: end }
       };
     }
 
@@ -772,5 +816,80 @@ export class ProductionService {
     }
 
     return results;
+  }
+  async voidOrder(orderId: string) {
+    const order = await OrderModel.findById(orderId);
+    if (!order) throw new Error("Order not found");
+
+    order.productionStage = "VOID";
+    order.voidedAt = new Date();
+    return await order.save();
+  }
+
+  /**
+   * Reverts a FINISHED order back to PENDING.
+   * Resets all production progress for the items in the order.
+   */
+  async revertOrder(orderId: string) {
+    const order = await OrderModel.findById(orderId);
+    if (!order) throw new Error("Order not found");
+
+    order.productionStage = "PENDING";
+
+    // Reset all products to starting state
+    order.products.forEach(p => {
+      p.produced = 0;
+      p.productionStatus = "PENDING";
+    });
+
+    order.markModified('products');
+    return await order.save();
+  }
+
+  async restoreOrder(orderId: string) {
+    const order = await OrderModel.findById(orderId);
+    if (!order) throw new Error("Order not found");
+
+    // 1-Hour Constraint Check
+    if (order.productionStage === 'VOID' && order.voidedAt) {
+      const now = new Date().getTime();
+      const voidTime = new Date(order.voidedAt).getTime();
+      const diffHours = (now - voidTime) / (1000 * 60 * 60);
+
+      if (diffHours > 1) {
+        throw new Error("Time limit exceeded. Voided orders can only be restored within 1 hour.");
+      }
+    }
+
+    order.productionStage = "PENDING";
+    order.voidedAt = null; // Clear timestamp
+
+    // Reset product progress when restoring a voided order
+    order.products.forEach(p => {
+      p.produced = 0;
+      p.productionStatus = "PENDING";
+    });
+    order.markModified('products');
+
+    return await order.save();
+  }
+
+  /**
+   * Marks an order as returned.
+   * Resets dispatchStatus to NOT_SENT but keeps production status (since it's already made).
+   * Appends a record to the notes.
+   */
+  async returnOrder(orderId: string, returnData: { notes: string; reportedBy: string }) {
+    const order = await OrderModel.findById(orderId);
+    if (!order) throw new Error("Order not found");
+
+    // Reset dispatch status so it moves back to "Pending Dispatch" 
+    // but keep productionStage as FINISHED/COMPLETED
+    order.dispatchStatus = "NOT_SENT";
+
+    const returnLog = `\n[DEVOLUCIÓN ${new Date().toLocaleString('es-EC')} por ${returnData.reportedBy}]: ${returnData.notes}`;
+    order.comments = (order.comments || "") + returnLog;
+
+    return await order.save();
   }
 }

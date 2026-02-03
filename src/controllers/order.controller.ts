@@ -144,16 +144,80 @@ Link Maps: ${orderData.googleMapsLink || 'N/A'}
 }
 
 /**
- * Get all orders
+ * Get all orders with optional filtering
  */
 export async function getOrders(req: Request, res: Response, next: NextFunction) {
   try {
-    const orders = await models.orders.find().sort({ createdAt: -1 }).limit(100);
-    res.status(200).send(orders);
+    const { search, startDate, endDate } = req.query;
+    const query: any = {};
+
+    // 1. Search Filter (Name, RUC, Email)
+    if (search) {
+      const searchRegex = new RegExp(String(search), 'i');
+      query.$or = [
+        { customerName: searchRegex },
+        { "invoiceData.ruc": searchRegex },
+        { "invoiceData.email": searchRegex }
+      ];
+    }
+
+    // 2. Date Filter (deliveryDate or createdAt)
+    if (startDate || endDate) {
+      const dateField = req.query.dateType === 'createdAt' ? 'createdAt' : 'deliveryDate';
+      query[dateField] = {};
+
+      if (startDate) {
+        const s = String(startDate);
+        if (/^\d{4}-\d{2}-\d{2}$/.test(s)) {
+          const [y, m, d] = s.split('-').map(Number);
+          // Standardize to UTC-5 boundaries (Ecuador)
+          // Since deliveryDate is stored as UTC 00:00, Date.UTC(y, m-1, d) is perfect.
+          // Since createdAt is full timestamp, Date.UTC(y, m-1, d, 5, 0, 0) would be 00:00 ECT.
+          // However, for simplicity and breadth, let's keep it consistent with the logic used for deliveryDate.
+          if (dateField === 'deliveryDate') {
+            query[dateField].$gte = new Date(Date.UTC(y, m - 1, d, 0, 0, 0, 0));
+          } else {
+            // For createdAt, we want 00:00:00 local EC (which is 05:00:00 UTC)
+            query[dateField].$gte = new Date(Date.UTC(y, m - 1, d, 5, 0, 0, 0));
+          }
+        } else {
+          query[dateField].$gte = new Date(s);
+        }
+      }
+      if (endDate) {
+        const e = String(endDate);
+        if (/^\d{4}-\d{2}-\d{2}$/.test(e)) {
+          const [y, m, d] = e.split('-').map(Number);
+          if (dateField === 'deliveryDate') {
+            query[dateField].$lte = new Date(Date.UTC(y, m - 1, d, 23, 59, 59, 999));
+          } else {
+            // End of day EC = 04:59:59 UTC next day
+            query[dateField].$lte = new Date(Date.UTC(y, m - 1, d, 23, 59, 59, 999) + (5 * 3600000));
+          }
+        } else {
+          const eDate = new Date(e);
+          eDate.setHours(23, 59, 59, 999);
+          query[dateField].$lte = eDate;
+        }
+      }
+    }
+
+    // 3. Execution
+    // If we have filters, we might want to return more than 100, or just default to a larger number.
+    // For now, let's keep a limit but make it larger if searching.
+    const limit = (search || startDate || endDate) ? 500 : 100;
+    const sortField = req.query.dateType === 'createdAt' ? 'createdAt' : 'deliveryDate';
+
+    const orders = await models.orders
+      .find(query)
+      .sort({ [sortField]: -1, createdAt: -1 }) // Sort by selected date field primarily
+      .limit(limit);
+
+    res.status(HttpStatusCode.Ok).send(orders);
     return;
   } catch (error) {
     console.error("❌ Error in getOrders:", error);
-    res.status(500).send({
+    res.status(HttpStatusCode.InternalServerError).send({
       message: "Internal server error while fetching orders.",
       error: error instanceof Error ? error.message : String(error)
     });
