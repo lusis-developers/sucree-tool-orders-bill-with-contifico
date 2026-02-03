@@ -28,4 +28,7 @@ router.post("/:id/invoice/generate", OrderController.generateInvoice);
 // GET /api/orders/:id/invoice-pdf
 router.get("/:id/invoice-pdf", OrderController.getInvoicePdf);
 
+// POST /api/orders/:id/settle-island
+router.post("/:id/settle-island", OrderController.settleOrderInIsland);
+
 export default router;
