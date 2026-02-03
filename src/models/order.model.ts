@@ -66,6 +66,8 @@ export interface IOrder extends Document {
   productionStage: "PENDING" | "IN_PROCESS" | "FINISHED" | "DELAYED" | "VOID";
   productionNotes: string;
   voidedAt: Date | null;
+  settledInIsland: boolean;
+  settledIslandName?: string;
 
   // Dispatch Fields
   dispatches: IDispatch[];
@@ -191,6 +193,8 @@ const OrderSchema = new Schema<IOrder>(
     },
     productionNotes: { type: String, default: "" },
     voidedAt: { type: Date, default: null },
+    settledInIsland: { type: Boolean, default: false },
+    settledIslandName: { type: String },
 
     // Dispatch Fields
     dispatches: { type: [DispatchSchema], default: [] },
