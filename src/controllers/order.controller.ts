@@ -45,6 +45,17 @@ export async function createOrder(req: Request, res: Response, next: NextFunctio
     if (!orderData.responsible) orderData.responsible = "Web";
     if (!orderData.paymentMethod) orderData.paymentMethod = "Por confirmar";
 
+    // Handle Settlement in Island during creation
+    if (orderData.settledInIsland && orderData.settledIslandName) {
+      orderData.paymentMethod = `Isla: ${orderData.settledIslandName}`;
+      orderData.paymentDetails = {
+        forma_cobro: 'ISLA',
+        monto: orderData.totalValue || 0,
+        fecha: new Date().toISOString().split('T')[0],
+        numero_comprobante: `ISLA-${orderData.settledIslandName}`
+      };
+    }
+
     // Initialize payments array if paymentDetails is present
     if (orderData.paymentDetails && orderData.paymentDetails.monto > 0) {
       orderData.payments = [{
@@ -683,3 +694,68 @@ export async function getInvoicePdf(req: Request, res: Response, next: NextFunct
     return;
   }
 }
+
+/**
+ * Settle an order in a physical island (Branch)
+ * Marks it as settled locally and registers an 'ISLA' payment.
+ */
+export async function settleOrderInIsland(req: Request, res: Response) {
+  try {
+    const { id } = req.params;
+    const { islandName } = req.body;
+
+    if (!islandName) {
+      res.status(HttpStatusCode.BadRequest).send({ message: "Island name is required." });
+      return;
+    }
+
+    const order = await models.orders.findById(id);
+
+    if (!order) {
+      res.status(HttpStatusCode.NotFound).send({ message: "Order not found." });
+      return;
+    }
+
+    // 1. Update settlement fields
+    order.settledInIsland = true;
+    order.settledIslandName = islandName;
+
+    // 2. Add 'ISLA' payment to mark as "Paid" in the system
+    // We add it to the payments array and update paymentMethod
+    const amountToSettle = order.totalValue;
+
+    order.payments.push({
+      forma_cobro: 'ISLA',
+      monto: amountToSettle,
+      fecha: new Date(),
+      reference: `Settled in ${islandName}`,
+      status: 'PAID'
+    });
+
+    // Update paymentMethod for summary
+    order.paymentMethod = `Isla: ${islandName}`;
+
+    // Update paymentDetails for list view legacy check (if still used)
+    if (!order.paymentDetails?.monto) {
+      order.paymentDetails = {
+        forma_cobro: 'ISLA',
+        monto: amountToSettle,
+        fecha: new Date().toISOString().split('T')[0],
+        numero_comprobante: `ISLA-${islandName}`
+      };
+    }
+
+    await order.save();
+
+    res.status(HttpStatusCode.Ok).send({
+      message: "Order settled in island successfully.",
+      order
+    });
+    return;
+  } catch (error) {
+    console.error("Error settling order in island:", error);
+    res.status(HttpStatusCode.InternalServerError).send({ message: "Internal Server Error" });
+    return;
+  }
+}
+
