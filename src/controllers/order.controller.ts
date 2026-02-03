@@ -320,7 +320,8 @@ export async function processPendingInvoices(req: Request, res: Response, next: 
         }
 
         // 4. Register Collection AUTOMATICALLY if payment details exist
-        if (order.paymentDetails && order.paymentDetails.monto) {
+        // SKIP if it's Credit (CR)
+        if (order.paymentDetails && order.paymentDetails.monto && order.paymentDetails.forma_cobro !== 'CR') {
           try {
             console.log(`💰 Registering automatic collection for order ${order._id}...`);
 
@@ -511,7 +512,7 @@ export async function registerCollection(req: Request, res: Response, next: Next
     // Also update top-level paymentMethod string if coming from UI mapping
     if (collectionData.forma_cobro) {
       // Map code to label for display
-      const methodMap: any = { 'TRA': 'Transferencia', 'EF': 'Efectivo', 'TC': 'Tarjeta de Crédito', 'CQ': 'Cheque' };
+      const methodMap: any = { 'TRA': 'Transferencia', 'TC': 'Tarjeta', 'CR': 'Crédito' };
       // Only update if it's the first payment or explicit override? 
       // Let's just update the label to reflect the latest method used.
       order.paymentMethod = methodMap[collectionData.forma_cobro] || order.paymentMethod;
@@ -540,6 +541,16 @@ export async function registerCollection(req: Request, res: Response, next: Next
     }
 
     // 5. Register Collection in Contífico (Immediate Mode)
+    // SKIP Contífico for Credit payments (CR)
+    if (collectionData.forma_cobro === 'CR') {
+      res.status(HttpStatusCode.Created).send({
+        message: "Payment registered as Credit (Internal).",
+        localOnly: true,
+        order
+      });
+      return;
+    }
+
     const payloadToSend = {
       ...collectionData,
       cuenta_bancaria_id: collectionData.cuenta_bancaria_id
@@ -606,7 +617,8 @@ export async function generateInvoice(req: Request, res: Response, next: NextFun
     contificoService.sendToSri(invoiceResponse.id).catch(err => console.error("SRI Error:", err));
 
     // Auto-Register Collection if exists
-    if (order.paymentDetails && order.paymentDetails.monto) {
+    // SKIP if it's Credit (CR)
+    if (order.paymentDetails && order.paymentDetails.monto && order.paymentDetails.forma_cobro !== 'CR') {
       try {
         const collectionPayload = {
           ...order.paymentDetails,
