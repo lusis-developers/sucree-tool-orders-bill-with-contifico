@@ -26,7 +26,6 @@ export async function getDashboardStats(req: Request, res: Response, next: NextF
     startDate.setHours(0, 0, 0, 0);
     endDate.setHours(23, 59, 59, 999);
 
-    console.log(`📊 Fetching cached analytics from ${startDate.toISOString()} to ${endDate.toISOString()}`);
 
     const summaries = await models.dailySummaries.find({
       dateIso: {
@@ -79,7 +78,6 @@ export async function syncAnalytics(req: Request, res: Response, next: NextFunct
 
     if (!to) to = from;
 
-    console.log(`🔄 Starting Analytics Sync from ${from} to ${to}`);
 
     // Parse DD/MM/YYYY to Date loop
     // Simple helper to parse "DD/MM/YYYY" to Date
@@ -103,7 +101,6 @@ export async function syncAnalytics(req: Request, res: Response, next: NextFunct
     while (current <= end) {
       const dayStr = current.toLocaleDateString("en-GB"); // DD/MM/YYYY
 
-      console.log(`   ⬇️ Syncing date: ${dayStr}`);
 
       // Fetch from Contífico
       // Note: this uses our existing service. 
@@ -176,7 +173,6 @@ export async function getSalesByResponsible(req: Request, res: Response, next: N
     startDate.setHours(0, 0, 0, 0);
     endDate.setHours(23, 59, 59, 999);
 
-    console.log(`📊 Fetching sales by responsible from ${startDate.toISOString()} to ${endDate.toISOString()}`);
 
     const stats = await models.orders.aggregate([
       {

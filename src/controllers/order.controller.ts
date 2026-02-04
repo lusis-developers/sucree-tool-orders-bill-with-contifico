@@ -267,7 +267,6 @@ export async function getOrderById(req: Request, res: Response, next: NextFuncti
  */
 export async function processPendingInvoices(req: Request, res: Response, next: NextFunction) {
   try {
-    console.log("⏰ Starting batch invoice processing...");
 
     // Find all orders with invoiceNeeded: true AND invoiceStatus: 'PENDING'
     // BATCH LIMIT: Process 5 at a time to avoid Vercel Timeouts (10s limit on free tier)
@@ -280,7 +279,6 @@ export async function processPendingInvoices(req: Request, res: Response, next: 
     });
 
     if (totalPending === 0) {
-      console.log("✅ No pending invoices to process.");
       res.status(200).send({ message: "No pending invoices found.", remaining: 0 });
       return;
     }
@@ -290,7 +288,6 @@ export async function processPendingInvoices(req: Request, res: Response, next: 
       invoiceStatus: "PENDING"
     }).limit(BATCH_SIZE);
 
-    console.log(`📦 Processing batch of ${pendingOrders.length} invoices. (${totalPending} total pending)`);
 
     const results = {
       processed: 0,
@@ -300,7 +297,6 @@ export async function processPendingInvoices(req: Request, res: Response, next: 
 
     for (const order of pendingOrders) {
       try {
-        console.log(`Processing invoice for order ${order._id}...`);
 
         // 1. Ensure client exists or create it (handled by logic if needed, but assuming data is ready)
         // Note: ContificoService.createInvoice creates the client if needed implicitly via the payload structure? 
@@ -334,7 +330,6 @@ export async function processPendingInvoices(req: Request, res: Response, next: 
         // SKIP if it's Credit (CR)
         if (order.paymentDetails && order.paymentDetails.monto && order.paymentDetails.forma_cobro !== 'CR') {
           try {
-            console.log(`💰 Registering automatic collection for order ${order._id}...`);
 
             // Fix Bank ID if needed for existing bad data
             const collectionPayload = {
@@ -344,7 +339,6 @@ export async function processPendingInvoices(req: Request, res: Response, next: 
             };
 
             await contificoService.registerCollection(invoiceResponse.id, collectionPayload);
-            console.log(`✅ Automatic collection registered for order ${order._id}`);
           } catch (collectionError: any) {
             console.error(`⚠️ Failed to register automatic collection for order ${order._id}:`, collectionError.message);
             // We don't fail the invoice process, just log it. 
@@ -609,7 +603,6 @@ export async function generateInvoice(req: Request, res: Response, next: NextFun
       order.invoiceNeeded = true;
     }
 
-    console.log(`🚀 Manual Invoice Generation triggered for ${id}`);
 
     // Create Invoice
     const invoiceResponse = await contificoService.createInvoice(order);

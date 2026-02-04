@@ -24,10 +24,8 @@ export async function getDocuments(req: Request, res: Response, next: NextFuncti
       filters.fecha_inicial = formatDate(thirtyDaysAgo);
       filters.fecha_final = formatDate(today);
 
-      console.log(`📅 No date filter. Defaulting to Dashboard Mode (${filters.fecha_inicial} - ${filters.fecha_final})`);
     }
 
-    console.log("📥 Get Documents Request filters:", filters);
 
     const documents = await contificoService.getDocuments(filters);
 
