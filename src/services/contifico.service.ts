@@ -31,11 +31,9 @@ export class ContificoService {
   async getCachedProducts(result_size: number = 2000) {
     const now = Date.now();
     if (ContificoService.cachedProducts && (now - ContificoService.cachedProductsTime < ContificoService.PRODUCTS_TTL)) {
-      console.log("🚀 Returning Products from Cache");
       return ContificoService.cachedProducts;
     }
 
-    console.log("🔄 Fetching Fresh Products for Cache...");
     // Fetch fresh
     const products = await this.getProducts({ result_size });
     if (products) {
@@ -51,11 +49,9 @@ export class ContificoService {
   async getCachedCategories() {
     const now = Date.now();
     if (ContificoService.cachedCategories && (now - ContificoService.cachedCategoriesTime < ContificoService.CATEGORIES_TTL)) {
-      console.log("🚀 Returning Categories from Cache");
       return ContificoService.cachedCategories;
     }
 
-    console.log("🔄 Fetching Fresh Categories for Cache...");
     const categories = await this.getCategories();
     if (categories) {
       ContificoService.cachedCategories = categories;
