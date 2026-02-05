@@ -86,7 +86,7 @@ export class ProductionService {
     );
   }
 
-  async getAggregatedItems() {
+  async getAggregatedItems(bucket?: 'delayed' | 'today' | 'tomorrow' | 'future') {
     // 0. Fetch Contifico Data (Categories & Products) for mapping
     // Ideally cached, but for now we fetch fresh or assume efficient enough
     const contificoService = new (require("./contifico.service").ContificoService)();
@@ -95,10 +95,10 @@ export class ProductionService {
     let productCategoryMap = new Map<string, string>(); // ProdID -> CatName (or ProdName -> CatName if ID not sync)
 
     try {
-      // Parallel Fetch
+      // Parallel Fetch with Caching
       const [categories, products] = await Promise.all([
-        contificoService.getCategories(),
-        contificoService.getProducts({ result_size: 2000 }) // Ensure we get enough
+        contificoService.getCachedCategories(),
+        contificoService.getCachedProducts(2000) // Ensure we get enough
       ]);
 
       if (categories) {
@@ -108,8 +108,6 @@ export class ProductionService {
       }
 
       // Map Products to Category Names based on Contifico ID
-      // We might not have Contifico ID in OrderProduct, so we might need fallback to Name match
-      // But OrderProduct has 'contifico_id' field!
       if (products) {
         products.forEach((p: any) => {
           // Map by Contifico ID
@@ -129,12 +127,60 @@ export class ProductionService {
       console.warn("⚠️ Failed to fetch Contifico metadata for categorization:", err);
     }
 
-    // 1. Fetch flattened list of all pending items
+    // 1. Define Time Buckets (normalized to Ecuador UTC-5)
+    // We need these for Filtering Logic AND Bucket Assigning
+    const now = new Date();
+    const ecNow = new Date(now.getTime() - (5 * 3600 * 1000));
+
+    const toDayStr = (d: Date) => d.toISOString().split('T')[0];
+    const todayStr = toDayStr(ecNow);
+
+    const tomorrowDate = new Date(ecNow);
+    tomorrowDate.setDate(tomorrowDate.getDate() + 1);
+    const tomorrowStr = toDayStr(tomorrowDate);
+
+    // 2. Build Query based on Bucket
+    // Base Match: Active Orders
+    const baseMatch: any = {
+      productionStage: { $in: ["PENDING", "IN_PROCESS", "DELAYED"] }
+    };
+
+    if (bucket) {
+      // Apply Date Filter based on bucket
+      // We assume stored deliveryDate is UTC correct or we compare strings?
+      // Mongo stored dates are full ISO objects. 
+      // Simple string comparison on YYYY-MM-DD works if we project, but for index efficiency we should use Date ranges.
+
+      const todayStart = new Date(todayStr + 'T00:00:00.000Z');
+      const todayEnd = new Date(todayStr + 'T23:59:59.999Z');
+
+      const tomorrowStart = new Date(tomorrowStr + 'T00:00:00.000Z');
+      const tomorrowEnd = new Date(tomorrowStr + 'T23:59:59.999Z');
+
+      // Adjust for Timezone offset if needed, but existing logic used simple string compare on output.
+      // Let's stick to the string projection logic inside aggregate if we want perfect match with previous logic,
+      // OR use range queries which are faster.
+      // Given previous logic used `itemDayStr <= todayStr`, let's attempt to replicate that.
+
+      if (bucket === 'delayed') {
+        // < Today
+        baseMatch.deliveryDate = { $lt: todayStart };
+      } else if (bucket === 'today') {
+        // >= TodayStart && <= TodayEnd
+        baseMatch.deliveryDate = { $gte: todayStart, $lte: todayEnd };
+      } else if (bucket === 'tomorrow') {
+        // >= TomorrowStart && <= TomorrowEnd
+        baseMatch.deliveryDate = { $gte: tomorrowStart, $lte: tomorrowEnd };
+      } else if (bucket === 'future') {
+        // > TomorrowEnd
+        baseMatch.deliveryDate = { $gt: tomorrowEnd };
+      }
+    }
+
+    // 3. Fetch flattened list of pending items
     const rawItems = await OrderModel.aggregate([
       {
-        $match: {
-          productionStage: { $in: ["PENDING", "IN_PROCESS", "DELAYED"] },
-        },
+        $match: baseMatch,
       },
       { $unwind: "$products" },
       {
@@ -176,29 +222,7 @@ export class ProductionService {
       { $sort: { deliveryDate: 1 } }
     ]);
 
-    // 2. Define Time Buckets (normalized to Ecuador UTC-5)
-    const now = new Date();
-    const ecNow = new Date(now.getTime() - (5 * 3600 * 1000));
-
-    const toDayStr = (d: Date) => d.toISOString().split('T')[0];
-    const todayStr = toDayStr(ecNow);
-
-    const tomorrowDate = new Date(ecNow);
-    tomorrowDate.setDate(tomorrowDate.getDate() + 1);
-    const tomorrowStr = toDayStr(tomorrowDate);
-
-    // 3. Mapping & Filtering Logic
-    const ALLOWED_CATEGORIES = [
-      'cakes enteros',
-      'cakes porcion',
-      'pack de turrones',
-      'panetton',
-      'secos market',
-      'individual',
-      'panaderais'
-    ];
-
-    // Helper to map Contifico Name to User Category
+    // 4. Mapping & Categorization Logic
     const mapCategory = (contificoName: string, productName: string): string | null => {
       const c = contificoName.toUpperCase();
       const p = productName.toUpperCase();
@@ -223,8 +247,7 @@ export class ProductionService {
       if (p.includes('SECOS') || p.includes('MARKET')) return 'secos market';
       if (p.includes('PORCION')) return 'cakes porcion';
 
-      // If it reaches here and it's not a Combo or generic service, mark as 'Otros'
-      if (c === 'COMBOS' && !p.includes('DEGUSTA')) return null; // Only keep Degustación from Combos
+      if (c === 'COMBOS' && !p.includes('DEGUSTA')) return null;
 
       return 'Otros';
     };
@@ -233,12 +256,10 @@ export class ProductionService {
 
     for (const item of rawItems) {
       // Determine Category
-      // 1. By Contifico ID
       let rawCat = "OTROS";
       if (item.contificoId && productCategoryMap.has(item.contificoId)) {
         rawCat = productCategoryMap.get(item.contificoId)!;
       } else if (productCategoryMap.has(item.productName.toLowerCase().trim())) {
-        // 2. By Name
         rawCat = productCategoryMap.get(item.productName.toLowerCase().trim())!;
       }
 
@@ -250,14 +271,7 @@ export class ProductionService {
       }
     }
 
-    // 4. Helper to group by Product Name within a bucket
-    // Now grouped by Category -> Product Name?
-    // The frontend expects: { today: [...items], tomorrow: ... }
-    // Users wants visual grouping by category. The frontend handles grouping if 'category' field exists.
-
-    // We stick to the existing structure of returning List<ItemSummary>, 
-    // but now we filter and enrich with 'category'.
-
+    // 5. Helper to group by Product Name
     const groupItems = (items: any[]) => {
       const groupedMap = new Map<string, any>();
 
@@ -289,29 +303,58 @@ export class ProductionService {
       return Array.from(groupedMap.values());
     };
 
-    // 5. Distribute items into buckets
+    // 6. IF Bucket is specified, we just return that list (wrapped in the expected key or flat?)
+    // To minimize frontend breakage, let's keep the return structure similar but only populate the requested key.
+
+    if (bucket) {
+      // Since we already filtered at DB level, ALL items belong to this bucket (mostly).
+      // However, we should double check because date math is tricky.
+      // Actually, since we want to be safe, we can just group everything.
+      // Or if we trust the DB query, we just run groupItems(processedItems).
+
+      const grouped = groupItems(processedItems);
+      return {
+        [bucket]: grouped
+      };
+    }
+
+    // Default Behavior (No bucket): Do the manual splitting for everything (Backward Compatibility)
     const buckets = {
       todayItems: [] as any[],
       tomorrowItems: [] as any[],
-      futureItems: [] as any[]
+      futureItems: [] as any[],
+      delayedItems: [] as any[] // Explicitly track delayed if we want to separate from future? No, logic was specific.
     };
 
+    // The logic below replicates the previous 'bucketizing' for the ALL case
     for (const item of processedItems) {
       const uDate = new Date(item.deliveryDate);
       const itemDayStr = toDayStr(uDate);
 
-      if (itemDayStr <= todayStr) {
+      // Note: Previous logic combined delayed into Today or handled it via sort?
+      // "delayed" items usually have date < today.
+      // Previous code: if (itemDayStr <= todayStr) -> buckets.todayItems
+      // So 'delayed' was part of 'today' in the old code return value?
+      // Wait, let's check the old code again.
+      // Old code: if (itemDayStr <= todayStr) buckets.todayItems.push(item);
+      // So YES, delayed items were returned under 'today'. 
+      // BUT if we want to split them now, we should probably stick to the requested explicit split: Delayed, Today, Tomorrow, Future.
+
+      if (itemDayStr < todayStr) {
+        buckets.delayedItems.push(item);
+      } else if (itemDayStr === todayStr) {
         buckets.todayItems.push(item);
-      } else if (itemDayStr <= tomorrowStr) {
+      } else if (itemDayStr === tomorrowStr) {
         buckets.tomorrowItems.push(item);
       } else {
         buckets.futureItems.push(item);
       }
     }
 
-    // 6. Return
+    // Return all
     return {
-      today: groupItems(buckets.todayItems),
+      delayed: groupItems(buckets.delayedItems),
+      today: groupItems(buckets.todayItems), // This now only has strictly TODAY items
       tomorrow: groupItems(buckets.tomorrowItems),
       future: groupItems(buckets.futureItems)
     };
@@ -409,6 +452,19 @@ export class ProductionService {
       distributed: quantityMade - remainingToDistribute,
       remaining: remainingToDistribute, // If > 0, we made more than needed!
     };
+  }
+
+  async batchRegisterProductionProgress(items: { productName: string; quantity: number }[]) {
+    const results = [];
+    for (const item of items) {
+      try {
+        const res = await this.registerProductionProgress(item.productName, item.quantity);
+        results.push({ name: item.productName, success: true, data: res });
+      } catch (err: any) {
+        results.push({ name: item.productName, success: false, error: err.message });
+      }
+    }
+    return results;
   }
 
   /**

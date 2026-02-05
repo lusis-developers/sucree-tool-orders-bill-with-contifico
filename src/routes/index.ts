@@ -7,6 +7,8 @@ import AnalyticsRouter from "./analytics.router";
 import UserRouter from "./user.router";
 import ProductionRouter from "./production.router";
 import POSRouter from "./pos.router";
+import ReplenishmentRouter from "./replenishment.router";
+import DeliveryPersonRouter from "./delivery-person.router";
 
 function routerApi(app: Application) {
   const router = express.Router();
@@ -19,6 +21,8 @@ function routerApi(app: Application) {
   router.use("/users", UserRouter);
   router.use("/production", ProductionRouter);
   router.use("/pos", POSRouter);
+  router.use("/replenishment", ReplenishmentRouter);
+  router.use("/delivery-personnel", DeliveryPersonRouter);
 }
 
 export default routerApi;

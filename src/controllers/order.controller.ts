@@ -45,6 +45,17 @@ export async function createOrder(req: Request, res: Response, next: NextFunctio
     if (!orderData.responsible) orderData.responsible = "Web";
     if (!orderData.paymentMethod) orderData.paymentMethod = "Por confirmar";
 
+    // Handle Settlement in Island during creation
+    if (orderData.settledInIsland && orderData.settledIslandName) {
+      orderData.paymentMethod = `Isla: ${orderData.settledIslandName}`;
+      orderData.paymentDetails = {
+        forma_cobro: 'ISLA',
+        monto: orderData.totalValue || 0,
+        fecha: new Date().toISOString().split('T')[0],
+        numero_comprobante: `ISLA-${orderData.settledIslandName}`
+      };
+    }
+
     // Initialize payments array if paymentDetails is present
     if (orderData.paymentDetails && orderData.paymentDetails.monto > 0) {
       orderData.payments = [{
@@ -63,6 +74,20 @@ export async function createOrder(req: Request, res: Response, next: NextFunctio
         return sum + (Number(p.price) * Number(p.quantity));
       }, 0);
       orderData.totalValue = calculatedTotal;
+    }
+
+    // Auto-populate deliveryValue if it's 0 but there's a "Delivery" product
+    if (!orderData.deliveryValue || orderData.deliveryValue === 0) {
+      const deliveryProduct = orderData.products.find((p: any) =>
+        p.name.toLowerCase().includes("delivery") || p.name.toLowerCase().includes("envío")
+      );
+      if (deliveryProduct) {
+        orderData.deliveryValue = Number(deliveryProduct.price) * Number(deliveryProduct.quantity);
+        // Also ensure deliveryType is set to delivery if we found a delivery fee
+        if (orderData.deliveryType !== "delivery") {
+          orderData.deliveryType = "delivery";
+        }
+      }
     }
 
     // 2. Save Order to Database
@@ -124,6 +149,9 @@ ${productsString}
 Dirección de Entrega: ${orderData.deliveryType === 'delivery' ? orderData.deliveryAddress : 'N/A (Retiro)'}
 
 Link Maps: ${orderData.googleMapsLink || 'N/A'}
+
+Motorizado: ${orderData.deliveryPerson?.name || 'Por asignar'}
+Valor Envío: $${orderData.deliveryValue || 0}
     `.trim();
 
     // 4. Send Response
@@ -256,7 +284,6 @@ export async function getOrderById(req: Request, res: Response, next: NextFuncti
  */
 export async function processPendingInvoices(req: Request, res: Response, next: NextFunction) {
   try {
-    console.log("⏰ Starting batch invoice processing...");
 
     // Find all orders with invoiceNeeded: true AND invoiceStatus: 'PENDING'
     // BATCH LIMIT: Process 5 at a time to avoid Vercel Timeouts (10s limit on free tier)
@@ -269,7 +296,6 @@ export async function processPendingInvoices(req: Request, res: Response, next: 
     });
 
     if (totalPending === 0) {
-      console.log("✅ No pending invoices to process.");
       res.status(200).send({ message: "No pending invoices found.", remaining: 0 });
       return;
     }
@@ -279,7 +305,6 @@ export async function processPendingInvoices(req: Request, res: Response, next: 
       invoiceStatus: "PENDING"
     }).limit(BATCH_SIZE);
 
-    console.log(`📦 Processing batch of ${pendingOrders.length} invoices. (${totalPending} total pending)`);
 
     const results = {
       processed: 0,
@@ -289,7 +314,6 @@ export async function processPendingInvoices(req: Request, res: Response, next: 
 
     for (const order of pendingOrders) {
       try {
-        console.log(`Processing invoice for order ${order._id}...`);
 
         // 1. Ensure client exists or create it (handled by logic if needed, but assuming data is ready)
         // Note: ContificoService.createInvoice creates the client if needed implicitly via the payload structure? 
@@ -320,9 +344,9 @@ export async function processPendingInvoices(req: Request, res: Response, next: 
         }
 
         // 4. Register Collection AUTOMATICALLY if payment details exist
-        if (order.paymentDetails && order.paymentDetails.monto) {
+        // SKIP if it's Credit (CR)
+        if (order.paymentDetails && order.paymentDetails.monto && order.paymentDetails.forma_cobro !== 'CR') {
           try {
-            console.log(`💰 Registering automatic collection for order ${order._id}...`);
 
             // Fix Bank ID if needed for existing bad data
             const collectionPayload = {
@@ -332,7 +356,6 @@ export async function processPendingInvoices(req: Request, res: Response, next: 
             };
 
             await contificoService.registerCollection(invoiceResponse.id, collectionPayload);
-            console.log(`✅ Automatic collection registered for order ${order._id}`);
           } catch (collectionError: any) {
             console.error(`⚠️ Failed to register automatic collection for order ${order._id}:`, collectionError.message);
             // We don't fail the invoice process, just log it. 
@@ -428,6 +451,69 @@ export async function updateInvoiceData(req: Request, res: Response, next: NextF
   }
 }
 
+/**
+ * Update an existing order (Generic)
+ * PUT /api/orders/:id
+ */
+export async function updateOrder(req: Request, res: Response, next: NextFunction) {
+  try {
+    const { id } = req.params;
+    const updateData = req.body;
+
+    const order = await models.orders.findById(id);
+
+    if (!order) {
+      res.status(HttpStatusCode.NotFound).send({ message: "Order not found." });
+      return;
+    }
+
+    // Update recursively or specifically
+    if (updateData.deliveryPerson) order.deliveryPerson = updateData.deliveryPerson;
+    if (updateData.deliveryValue !== undefined) order.deliveryValue = updateData.deliveryValue;
+    if (updateData.deliveryType) order.deliveryType = updateData.deliveryType;
+    if (updateData.branch) order.branch = updateData.branch;
+    if (updateData.comments) order.comments = updateData.comments;
+    if (updateData.customerName) order.customerName = updateData.customerName;
+    if (updateData.customerPhone) order.customerPhone = updateData.customerPhone;
+    if (updateData.deliveryAddress) order.deliveryAddress = updateData.deliveryAddress;
+    if (updateData.googleMapsLink) order.googleMapsLink = updateData.googleMapsLink;
+
+    // NEW: Allow updating core order data (products, payments)
+    if (updateData.products) order.products = updateData.products;
+    if (updateData.totalValue !== undefined) order.totalValue = updateData.totalValue;
+
+    // Payment updates
+    if (updateData.paymentDetails) order.paymentDetails = updateData.paymentDetails;
+    if (updateData.payments) order.payments = updateData.payments;
+    if (updateData.paymentMethod) order.paymentMethod = updateData.paymentMethod;
+
+    // Invoice Data updates (if not processed)
+    if (order.invoiceStatus !== 'PROCESSED') {
+      if (updateData.invoiceNeeded !== undefined) order.invoiceNeeded = updateData.invoiceNeeded;
+      if (updateData.invoiceData) order.invoiceData = updateData.invoiceData;
+    }
+
+    // Settlement updates
+    if (updateData.settledInIsland !== undefined) order.settledInIsland = updateData.settledInIsland;
+    if (updateData.settledIslandName) order.settledIslandName = updateData.settledIslandName;
+
+    await order.save();
+
+    res.status(HttpStatusCode.Ok).send({
+      message: "Order updated successfully.",
+      order
+    });
+    return;
+  } catch (error) {
+    console.error("❌ Error in updateOrder:", error);
+    res.status(HttpStatusCode.InternalServerError).send({
+      message: "Internal server error while updating order.",
+      error: error instanceof Error ? error.message : String(error)
+    });
+    return;
+  }
+}
+
 // Helper to map bank names to Contífico IDs
 function resolveBankId(inputName: string | undefined): string {
   if (!inputName) return "";
@@ -511,7 +597,7 @@ export async function registerCollection(req: Request, res: Response, next: Next
     // Also update top-level paymentMethod string if coming from UI mapping
     if (collectionData.forma_cobro) {
       // Map code to label for display
-      const methodMap: any = { 'TRA': 'Transferencia', 'EF': 'Efectivo', 'TC': 'Tarjeta de Crédito', 'CQ': 'Cheque' };
+      const methodMap: any = { 'TRA': 'Transferencia', 'TC': 'Tarjeta', 'CR': 'Crédito' };
       // Only update if it's the first payment or explicit override? 
       // Let's just update the label to reflect the latest method used.
       order.paymentMethod = methodMap[collectionData.forma_cobro] || order.paymentMethod;
@@ -540,6 +626,16 @@ export async function registerCollection(req: Request, res: Response, next: Next
     }
 
     // 5. Register Collection in Contífico (Immediate Mode)
+    // SKIP Contífico for Credit payments (CR)
+    if (collectionData.forma_cobro === 'CR') {
+      res.status(HttpStatusCode.Created).send({
+        message: "Payment registered as Credit (Internal).",
+        localOnly: true,
+        order
+      });
+      return;
+    }
+
     const payloadToSend = {
       ...collectionData,
       cuenta_bancaria_id: collectionData.cuenta_bancaria_id
@@ -587,7 +683,6 @@ export async function generateInvoice(req: Request, res: Response, next: NextFun
       order.invoiceNeeded = true;
     }
 
-    console.log(`🚀 Manual Invoice Generation triggered for ${id}`);
 
     // Create Invoice
     const invoiceResponse = await contificoService.createInvoice(order);
@@ -606,7 +701,8 @@ export async function generateInvoice(req: Request, res: Response, next: NextFun
     contificoService.sendToSri(invoiceResponse.id).catch(err => console.error("SRI Error:", err));
 
     // Auto-Register Collection if exists
-    if (order.paymentDetails && order.paymentDetails.monto) {
+    // SKIP if it's Credit (CR)
+    if (order.paymentDetails && order.paymentDetails.monto && order.paymentDetails.forma_cobro !== 'CR') {
       try {
         const collectionPayload = {
           ...order.paymentDetails,
@@ -671,3 +767,226 @@ export async function getInvoicePdf(req: Request, res: Response, next: NextFunct
     return;
   }
 }
+
+/**
+ * Settle an order in a physical island (Branch)
+ * Marks it as settled locally and registers an 'ISLA' payment.
+ */
+export async function settleOrderInIsland(req: Request, res: Response) {
+  try {
+    const { id } = req.params;
+    const { islandName } = req.body;
+
+    if (!islandName) {
+      res.status(HttpStatusCode.BadRequest).send({ message: "Island name is required." });
+      return;
+    }
+
+    const order = await models.orders.findById(id);
+
+    if (!order) {
+      res.status(HttpStatusCode.NotFound).send({ message: "Order not found." });
+      return;
+    }
+
+    // 1. Update settlement fields
+    order.settledInIsland = true;
+    order.settledIslandName = islandName;
+
+    // 2. Add 'ISLA' payment to mark as "Paid" in the system
+    // We add it to the payments array and update paymentMethod
+    const amountToSettle = order.totalValue;
+
+    order.payments.push({
+      forma_cobro: 'ISLA',
+      monto: amountToSettle,
+      fecha: new Date(),
+      reference: `Settled in ${islandName}`,
+      status: 'PAID'
+    });
+
+    // Update paymentMethod for summary
+    order.paymentMethod = `Isla: ${islandName}`;
+
+    // Update paymentDetails for list view legacy check (if still used)
+    if (!order.paymentDetails?.monto) {
+      order.paymentDetails = {
+        forma_cobro: 'ISLA',
+        monto: amountToSettle,
+        fecha: new Date().toISOString().split('T')[0],
+        numero_comprobante: `ISLA-${islandName}`
+      };
+    }
+
+    await order.save();
+
+    res.status(HttpStatusCode.Ok).send({
+      message: "Order settled in island successfully.",
+      order
+    });
+    return;
+  } catch (error) {
+    console.error("Error settling order in island:", error);
+    res.status(HttpStatusCode.InternalServerError).send({ message: "Internal Server Error" });
+    return;
+  }
+}
+
+/**
+ * Get delivery report with totals and grouped data
+ * GET /api/orders/reports/delivery
+ */
+export async function getDeliveryReport(req: Request, res: Response, next: NextFunction) {
+  try {
+    const { startDate, endDate, deliveryPersonId } = req.query;
+
+    if (!startDate || !endDate) {
+      res.status(HttpStatusCode.BadRequest).send({
+        message: "startDate and endDate are required parameters (YYYY-MM-DD)."
+      });
+      return;
+    }
+
+    const query: any = {
+      deliveryDate: {
+        $gte: new Date(`${startDate}T00:00:00.000Z`),
+        $lte: new Date(`${endDate}T23:59:59.999Z`)
+      }
+    };
+
+    if (deliveryPersonId) {
+      query["deliveryPerson.personId"] = deliveryPersonId;
+    }
+
+    const allOrders = await models.orders.find(query)
+      .select("orderDate deliveryDate customerName deliveryValue deliveryPerson totalValue status products deliveryType")
+      .sort({ deliveryDate: 1 });
+
+    // Filter and map orders to include those that either have a deliveryValue OR a "Delivery" product
+    const orders = allOrders.map(o => {
+      let finalDeliveryValue = o.deliveryValue || 0;
+
+      // Fallback: If deliveryValue is 0, check products for "Delivery"
+      if (finalDeliveryValue === 0 && o.products) {
+        const deliveryProduct = o.products.find((p: any) =>
+          p.name.toLowerCase().includes("delivery") || p.name.toLowerCase().includes("envío")
+        );
+        if (deliveryProduct) {
+          finalDeliveryValue = deliveryProduct.price * deliveryProduct.quantity;
+        }
+      }
+
+      return {
+        ...o.toObject(),
+        deliveryValue: finalDeliveryValue
+      };
+    }).filter(o => o.deliveryValue > 0 || o.deliveryType === 'delivery');
+
+    const total = orders.reduce((sum, o) => sum + (o.deliveryValue || 0), 0);
+
+    // Grouping by delivery person for extra clarity
+    const summaryByPerson = orders.reduce((acc: any, o: any) => {
+      const personName = o.deliveryPerson?.name || "Sin asignar";
+      if (!acc[personName]) {
+        acc[personName] = { name: personName, total: 0, count: 0 };
+      }
+      acc[personName].total += (o.deliveryValue || 0);
+      acc[personName].count += 1;
+      return acc;
+    }, {});
+
+    res.status(HttpStatusCode.Ok).send({
+      message: "Delivery report retrieved successfully.",
+      data: {
+        total: Number(total.toFixed(2)),
+        count: orders.length,
+        summary: Object.values(summaryByPerson),
+        orders
+      }
+    });
+    return;
+  } catch (error) {
+    console.error("❌ Error in getDeliveryReport:", error);
+    res.status(HttpStatusCode.InternalServerError).send({
+      message: "Error generating delivery report.",
+      error: error instanceof Error ? error.message : String(error)
+    });
+    return;
+  }
+}
+
+/**
+ * Bulk assign multiple orders to a delivery person
+ * POST /api/orders/bulk-assign
+ */
+export async function bulkAssignOrders(req: Request, res: Response, next: NextFunction) {
+  try {
+    const { orderIds, deliveryPerson } = req.body;
+
+    if (!Array.isArray(orderIds) || orderIds.length === 0) {
+      res.status(HttpStatusCode.BadRequest).send({ message: "No order IDs provided." });
+      return;
+    }
+
+    // Prepare update object
+    const update = {
+      deliveryPerson: deliveryPerson || null, // null removes assignment
+    };
+
+    const result = await models.orders.updateMany(
+      { _id: { $in: orderIds } },
+      { $set: update }
+    );
+
+    res.status(HttpStatusCode.Ok).send({
+      message: `${result.modifiedCount} orders updated successfully.`,
+      modifiedCount: result.modifiedCount
+    });
+    return;
+  } catch (error) {
+    console.error("❌ Error in bulkAssignOrders:", error);
+    res.status(HttpStatusCode.InternalServerError).send({
+      message: "Error bulk assigning orders.",
+      error: error instanceof Error ? error.message : String(error)
+    });
+    return;
+  }
+}
+
+/**
+ * Reassign all orders from one delivery person to another (or unassign)
+ * POST /api/orders/reassign-delivery
+ */
+export async function reassignDelivery(req: Request, res: Response, next: NextFunction) {
+  try {
+    const { oldPersonId, newPerson } = req.body;
+
+    if (!oldPersonId) {
+      res.status(HttpStatusCode.BadRequest).send({ message: "Old Person ID is required." });
+      return;
+    }
+
+    const update = {
+      deliveryPerson: newPerson || null
+    };
+
+    const result = await models.orders.updateMany(
+      { "deliveryPerson.personId": oldPersonId },
+      { $set: update }
+    );
+
+    res.status(HttpStatusCode.Ok).send({
+      message: `${result.modifiedCount} orders reassigned successfully.`,
+      modifiedCount: result.modifiedCount
+    });
+    return;
+  } catch (error) {
+    console.error("❌ Error in reassignDelivery:", error);
+    res.status(HttpStatusCode.InternalServerError).send({
+      message: "Error reassigning delivery.",
+      error: error instanceof Error ? error.message : String(error)
+    });
+    return;
+  }
+}
+

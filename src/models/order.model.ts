@@ -38,6 +38,11 @@ export interface IDispatch {
 
 export interface IOrder extends Document {
   // ... existing fields ...
+  deliveryPerson?: {
+    name: string;
+    identification: string;
+    personId?: Types.ObjectId;
+  };
   orderDate: Date;
   deliveryDate: Date;
   deliveryTime?: string;
@@ -66,6 +71,8 @@ export interface IOrder extends Document {
   productionStage: "PENDING" | "IN_PROCESS" | "FINISHED" | "DELAYED" | "VOID";
   productionNotes: string;
   voidedAt: Date | null;
+  settledInIsland: boolean;
+  settledIslandName?: string;
 
   // Dispatch Fields
   dispatches: IDispatch[];
@@ -124,6 +131,11 @@ const DispatchSchema = new Schema<IDispatch>({
 
 const OrderSchema = new Schema<IOrder>(
   {
+    deliveryPerson: {
+      name: { type: String },
+      identification: { type: String },
+      personId: { type: Schema.Types.ObjectId, ref: "DeliveryPerson" }
+    },
     orderDate: { type: Date, required: true },
     deliveryDate: { type: Date, required: true },
     deliveryTime: { type: String, required: false },
@@ -191,6 +203,8 @@ const OrderSchema = new Schema<IOrder>(
     },
     productionNotes: { type: String, default: "" },
     voidedAt: { type: Date, default: null },
+    settledInIsland: { type: Boolean, default: false },
+    settledIslandName: { type: String },
 
     // Dispatch Fields
     dispatches: { type: [DispatchSchema], default: [] },

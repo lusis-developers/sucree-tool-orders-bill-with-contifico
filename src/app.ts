@@ -27,7 +27,6 @@ export default function createApp() {
   app.use(cors(corsOptions));
 
   app.use((req, res, next) => {
-    console.log(`🌐 Petición desde: ${req.headers.origin}`);
     next();
   });
 

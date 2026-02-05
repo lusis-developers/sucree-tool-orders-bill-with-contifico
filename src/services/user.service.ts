@@ -86,18 +86,14 @@ export class UserService {
       },
     ];
 
-    console.log("🌱 Checking users seed...");
 
     for (const userData of usersToSeed) {
       const exists = await this.findByEmail(userData.email);
       if (!exists) {
-        console.log(`Creating user: ${userData.email} [${userData.role}]`);
         await this.createUser(userData as IUser);
       } else {
-        console.log(`User already exists: ${userData.email}`);
       }
     }
 
-    console.log("✅ Users seed check completed.");
   }
 }

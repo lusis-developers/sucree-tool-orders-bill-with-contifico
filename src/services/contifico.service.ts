@@ -15,6 +15,51 @@ export class ContificoService {
     }
   }
 
+  // --- CACHE DEFINITIONS ---
+  private static cachedProducts: any[] | null = null;
+  private static cachedProductsTime: number = 0;
+  private static readonly PRODUCTS_TTL = 3600 * 1000; // 1 hour
+
+  private static cachedCategories: any[] | null = null;
+  private static cachedCategoriesTime: number = 0;
+  private static readonly CATEGORIES_TTL = 3600 * 1000; // 1 hour
+
+  /**
+   * Get cached products or fetch fresh if expired.
+   * Useful for heavy dashboards.
+   */
+  async getCachedProducts(result_size: number = 2000) {
+    const now = Date.now();
+    if (ContificoService.cachedProducts && (now - ContificoService.cachedProductsTime < ContificoService.PRODUCTS_TTL)) {
+      return ContificoService.cachedProducts;
+    }
+
+    // Fetch fresh
+    const products = await this.getProducts({ result_size });
+    if (products) {
+      ContificoService.cachedProducts = products;
+      ContificoService.cachedProductsTime = now;
+    }
+    return products || [];
+  }
+
+  /**
+   * Get cached categories or fetch fresh if expired.
+   */
+  async getCachedCategories() {
+    const now = Date.now();
+    if (ContificoService.cachedCategories && (now - ContificoService.cachedCategoriesTime < ContificoService.CATEGORIES_TTL)) {
+      return ContificoService.cachedCategories;
+    }
+
+    const categories = await this.getCategories();
+    if (categories) {
+      ContificoService.cachedCategories = categories;
+      ContificoService.cachedCategoriesTime = now;
+    }
+    return categories || [];
+  }
+
   /**
    * Create an invoice in Contífico
    */
@@ -140,7 +185,6 @@ export class ContificoService {
         metodo_pago: "TRA"
       };
 
-      console.log("🚀 Sending invoice to Contífico:", JSON.stringify(payload, null, 2));
 
       const response = await axios.post(`${this.baseUrl}/documento/`, payload, {
         headers: {
@@ -149,7 +193,6 @@ export class ContificoService {
         },
       });
 
-      console.log("✅ Contífico response:", response.data);
       return response.data;
     } catch (error: any) {
       console.error("❌ Error creating invoice in Contífico:", error.response?.data || error.message);
@@ -172,7 +215,6 @@ export class ContificoService {
       if (options.result_size) params.result_size = options.result_size;
       if (options.result_page) params.result_page = options.result_page;
 
-      console.log("🔍 Fetching products from Contífico with params:", params);
 
       const response = await axios.get(`${this.baseUrl}/producto/`, {
         headers: {
@@ -190,13 +232,11 @@ export class ContificoService {
 
   async getCategories() {
     try {
-      console.log("🔍 Fetching categories from Contífico...");
       const response = await axios.get(`${this.baseUrl}/categoria/`, {
         headers: {
           Authorization: this.apiKey,
         },
       });
-      console.log(response.data)
       return response.data;
     } catch (error: any) {
       console.error("❌ Error fetching categories from Contífico:", error.response?.data || error.message);
@@ -210,7 +250,6 @@ export class ContificoService {
    */
   async getPerson(query: string) {
     try {
-      console.log("🔍 Fetching person from Contífico with query:", query);
 
       const params: any = {};
 
@@ -248,7 +287,6 @@ export class ContificoService {
    */
   async createPerson(personData: IPerson): Promise<IPerson> {
     try {
-      console.log("📝 Creating person in Contífico:", personData);
 
       // If tipo is not provided, infer from length
       const tipo = personData.tipo || (personData.ruc.length === 13 ? "J" : "N");
@@ -309,7 +347,6 @@ export class ContificoService {
       // 1057 Error Fix: Falta campo caja
       // If no caja_id is provided, try to find one
       if (!payload.caja_id) {
-        console.log("⚠️ No caja_id provided, fetching available Cajas...");
         const cajas = await this.getCajas();
 
         if (cajas && cajas.length > 0) {
@@ -333,7 +370,6 @@ export class ContificoService {
           }
 
           payload.caja_id = targetCajaId;
-          console.log(`✅ Using Auto-Selected Caja ID: ${targetCajaId}`);
 
         } else {
           console.warn("⚠️ No Cajas found in Contífico account.");
@@ -348,7 +384,6 @@ export class ContificoService {
         const looksLikeName = providedId && (providedId.includes(' ') || providedId.length > 25);
 
         if (!providedId || looksLikeName) {
-          console.log(`⚠️ Resolving Bank Account ID for '${providedId || "default"}'...`);
           const banks = await this.getBankAccounts();
 
           if (banks && banks.length > 0) {
@@ -364,7 +399,6 @@ export class ContificoService {
             }
 
             if (match) {
-              console.log(`✅ Selected Bank Account: ${match.nombre} (${match.id})`);
               payload.cuenta_bancaria_id = match.id;
 
               // Ensure tipo_ping is set (D = Deposito)
@@ -376,7 +410,6 @@ export class ContificoService {
         }
       }
 
-      console.log(`💰 Registering collection for document ${documentId}:`, payload);
 
       const response = await axios.post(`${this.baseUrl}/documento/${documentId}/cobro/`, payload, {
         headers: {
@@ -385,7 +418,6 @@ export class ContificoService {
         },
       });
 
-      console.log("✅ Contífico collection response:", response.data);
       return response.data;
     } catch (error: any) {
       console.error("❌ Error registering collection in Contífico:", error.response?.data || error.message);
@@ -427,7 +459,6 @@ export class ContificoService {
    */
   async getDocument(id: string) {
     try {
-      console.log(`🔍 Fetching document ${id} from Contífico...`);
       const response = await axios.get(`${this.baseUrl}/documento/${id}/`, {
         headers: { Authorization: this.apiKey }
       });
@@ -443,7 +474,6 @@ export class ContificoService {
    */
   async getCajas() {
     try {
-      console.log("🔍 Fetching Cajas from Contífico...");
       const response = await axios.get(`${this.baseUrl}/caja/`, {
         headers: { Authorization: this.apiKey }
       });
@@ -476,18 +506,50 @@ export class ContificoService {
    */
   async sendToSri(documentId: string) {
     try {
-      console.log(`📡 Sending document ${documentId} to SRI...`);
       // PUT /documento/<ID>/sri/ - No body required
       const response = await axios.put(`${this.baseUrl}/documento/${documentId}/sri/`, {}, {
         headers: { Authorization: this.apiKey }
       });
-      console.log("✅ SRI Authorization triggered:", response.data);
       return response.data;
     } catch (error: any) {
       console.warn("⚠️ Error triggering SRI authorization:", error.response?.data || error.message);
       // We don't throw here because the invoice is already created and valid, just not authorized yet.
       // Contifico auto-script might pick it up later.
       return { error: error.response?.data || error.message };
+    }
+  }
+
+  /**
+   * Get stock per warehouse for a specific product
+   * @param productId The Contífico Product ID
+   */
+  async getStockByProduct(productId: string) {
+    try {
+      if (!productId) throw new Error("Product ID is required");
+
+      const response = await axios.get(`${this.baseUrl}/producto/${productId}/stock/`, {
+        headers: { Authorization: this.apiKey },
+      });
+
+      return response.data;
+    } catch (error: any) {
+      console.error(`❌ Error fetching stock for product ${productId}:`, error.response?.data || error.message);
+      return [];
+    }
+  }
+
+  /**
+   * Get warehouses from Contífico
+   */
+  async getWarehouses() {
+    try {
+      const response = await axios.get(`${this.baseUrl}/bodega/`, {
+        headers: { Authorization: this.apiKey },
+      });
+      return response.data;
+    } catch (error: any) {
+      console.error("❌ Error fetching warehouses from Contífico:", error.response?.data || error.message);
+      return [];
     }
   }
 }
