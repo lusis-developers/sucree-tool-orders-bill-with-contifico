@@ -152,6 +152,20 @@ export class ContificoService {
       // POS: Caja Dulcería (00f60268-ca0c-48f9-8768-4f2625fa975a)
       const POS_DULCERIA_ID = "00f60268-ca0c-48f9-8768-4f2625fa975a";
 
+      // Standardize ID: Trim spaces
+      const rawId = (orderData.invoiceData.ruc || "").trim();
+      const isCedula = rawId.length === 10;
+
+      const clientePayload = {
+        razon_social: orderData.invoiceData.businessName,
+        ruc: isCedula ? "" : rawId,
+        cedula: isCedula ? rawId : "",
+        email: orderData.invoiceData.email,
+        direccion: orderData.invoiceData.address,
+        tipo: "C",
+        telefonos: orderData.customerPhone
+      };
+
       const payload = {
         pos: POS_DULCERIA_ID,
         fecha_emision: new Date().toLocaleDateString("en-GB"), // DD/MM/YYYY
@@ -160,19 +174,11 @@ export class ContificoService {
         estado: "P",
         electronico: true,
         autorizacion: "",
-        cliente: {
-          razon_social: orderData.invoiceData.businessName,
-          ruc: orderData.invoiceData.ruc,
-          cedula: orderData.invoiceData.ruc.length === 10 ? orderData.invoiceData.ruc : "", // Try to send cedula if ruc is 10 digits (cedula)
-          email: orderData.invoiceData.email,
-          direccion: orderData.invoiceData.address,
-          tipo: "C",
-          telefonos: orderData.customerPhone
-        },
+        cliente: clientePayload,
         detalles: detalles.map((d: any) => ({
           ...d,
           porcentaje_descuento: d.descuento,
-          descuento: undefined // Remove old field if needed, or keep if API ignores it. Better to be clean.
+          descuento: undefined
         })),
         subtotal_0: Number(subtotal_0.toFixed(2)),
         subtotal_12: 0,

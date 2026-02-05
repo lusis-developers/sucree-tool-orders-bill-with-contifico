@@ -230,6 +230,11 @@ export async function getOrders(req: Request, res: Response, next: NextFunction)
       }
     }
 
+    // 3. Invoice Status Filter (ERROR, PENDING, PROCESSED)
+    if (req.query.invoiceStatus) {
+      query.invoiceStatus = req.query.invoiceStatus;
+    }
+
     // 3. Execution
     // If we have filters, we might want to return more than 100, or just default to a larger number.
     // For now, let's keep a limit but make it larger if searching.
