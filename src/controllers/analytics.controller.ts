@@ -177,7 +177,8 @@ export async function getSalesByResponsible(req: Request, res: Response, next: N
     const stats = await models.orders.aggregate([
       {
         $match: {
-          createdAt: { $gte: startDate, $lte: endDate }
+          createdAt: { $gte: startDate, $lte: endDate },
+          invoiceStatus: { $ne: "VOID" } // Ensure we don't count voided orders
         }
       },
       {
@@ -192,13 +193,31 @@ export async function getSalesByResponsible(req: Request, res: Response, next: N
       }
     ]);
 
+    // Map Roles
+    const enhancedStats = stats.map(s => {
+      let role = 'Vendedor';
+      const name = s._id ? s._id.toLowerCase() : '';
+
+      if (name.includes('web') || name.includes('online')) {
+        role = 'Digital';
+      } else if (name.includes('hillary') || name.includes('ivin') || name.includes('e')) {
+        role = 'Comercial'; // Known sales reps
+      }
+
+      return {
+        ...s,
+        role
+      };
+    });
+
     res.status(HttpStatusCode.Ok).send({
       message: "Sales by responsible retrieved successfully.",
       range: {
         from: startDate.toLocaleDateString(),
         to: endDate.toLocaleDateString()
       },
-      stats
+      monthlyGoal: 13000,
+      stats: enhancedStats
     });
     return;
   } catch (error) {

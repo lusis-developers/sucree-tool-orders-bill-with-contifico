@@ -468,7 +468,6 @@ export async function updateOrder(req: Request, res: Response, next: NextFunctio
     }
 
     // Update recursively or specifically
-    // For now, let's allow updating delivery person and other non-sensitive fields
     if (updateData.deliveryPerson) order.deliveryPerson = updateData.deliveryPerson;
     if (updateData.deliveryValue !== undefined) order.deliveryValue = updateData.deliveryValue;
     if (updateData.deliveryType) order.deliveryType = updateData.deliveryType;
@@ -478,6 +477,25 @@ export async function updateOrder(req: Request, res: Response, next: NextFunctio
     if (updateData.customerPhone) order.customerPhone = updateData.customerPhone;
     if (updateData.deliveryAddress) order.deliveryAddress = updateData.deliveryAddress;
     if (updateData.googleMapsLink) order.googleMapsLink = updateData.googleMapsLink;
+
+    // NEW: Allow updating core order data (products, payments)
+    if (updateData.products) order.products = updateData.products;
+    if (updateData.totalValue !== undefined) order.totalValue = updateData.totalValue;
+
+    // Payment updates
+    if (updateData.paymentDetails) order.paymentDetails = updateData.paymentDetails;
+    if (updateData.payments) order.payments = updateData.payments;
+    if (updateData.paymentMethod) order.paymentMethod = updateData.paymentMethod;
+
+    // Invoice Data updates (if not processed)
+    if (order.invoiceStatus !== 'PROCESSED') {
+      if (updateData.invoiceNeeded !== undefined) order.invoiceNeeded = updateData.invoiceNeeded;
+      if (updateData.invoiceData) order.invoiceData = updateData.invoiceData;
+    }
+
+    // Settlement updates
+    if (updateData.settledInIsland !== undefined) order.settledInIsland = updateData.settledInIsland;
+    if (updateData.settledIslandName) order.settledIslandName = updateData.settledIslandName;
 
     await order.save();
 
