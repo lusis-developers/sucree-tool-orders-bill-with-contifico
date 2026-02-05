@@ -187,6 +187,27 @@ export async function registerProgress(req: Request, res: Response) {
   }
 }
 
+export async function batchRegisterProgress(req: Request, res: Response) {
+  try {
+    const { items } = req.body; // items: [{ productName: string, quantity: number }]
+
+    if (!items || !Array.isArray(items) || items.length === 0) {
+      res.status(HttpStatusCode.BadRequest).send({ message: "Invalid payload. 'items' array required." });
+      return;
+    }
+
+    const result = await productionService.batchRegisterProductionProgress(items);
+
+    res.status(HttpStatusCode.Ok).send({
+      message: "Batch progress registered successfully.",
+      data: result
+    });
+  } catch (error: any) {
+    console.error("Batch progress register error:", error);
+    res.status(HttpStatusCode.InternalServerError).send({ message: "Failed", error: error.message });
+  }
+}
+
 export async function voidOrder(req: Request, res: Response) {
   try {
     const { id } = req.params;
