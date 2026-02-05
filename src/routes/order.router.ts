@@ -9,9 +9,20 @@ router.post("/", OrderController.createOrder);
 // GET /api/orders
 router.get("/", OrderController.getOrders);
 
+// GET /api/orders/reports/delivery
+router.get("/reports/delivery", OrderController.getDeliveryReport);
 
 // GET /api/orders/:id
 router.get("/:id", OrderController.getOrderById);
+
+// PUT /api/orders/:id
+router.put("/:id", OrderController.updateOrder);
+
+// POST /api/orders/bulk-assign
+router.post("/bulk-assign", OrderController.bulkAssignOrders);
+
+// POST /api/orders/reassign-delivery
+router.post("/reassign-delivery", OrderController.reassignDelivery);
 
 // POST /api/orders/batch-invoice (Protected by Cron)
 router.post("/batch-invoice", OrderController.processPendingInvoices);
