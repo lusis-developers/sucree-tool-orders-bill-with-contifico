@@ -38,6 +38,11 @@ export interface IDispatch {
 
 export interface IOrder extends Document {
   // ... existing fields ...
+  deliveryPerson?: {
+    name: string;
+    identification: string;
+    personId?: Types.ObjectId;
+  };
   orderDate: Date;
   deliveryDate: Date;
   deliveryTime?: string;
@@ -126,6 +131,11 @@ const DispatchSchema = new Schema<IDispatch>({
 
 const OrderSchema = new Schema<IOrder>(
   {
+    deliveryPerson: {
+      name: { type: String },
+      identification: { type: String },
+      personId: { type: Schema.Types.ObjectId, ref: "DeliveryPerson" }
+    },
     orderDate: { type: Date, required: true },
     deliveryDate: { type: Date, required: true },
     deliveryTime: { type: String, required: false },
