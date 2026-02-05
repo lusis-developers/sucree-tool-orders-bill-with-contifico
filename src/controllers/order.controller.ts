@@ -76,6 +76,20 @@ export async function createOrder(req: Request, res: Response, next: NextFunctio
       orderData.totalValue = calculatedTotal;
     }
 
+    // Auto-populate deliveryValue if it's 0 but there's a "Delivery" product
+    if (!orderData.deliveryValue || orderData.deliveryValue === 0) {
+      const deliveryProduct = orderData.products.find((p: any) =>
+        p.name.toLowerCase().includes("delivery") || p.name.toLowerCase().includes("envío")
+      );
+      if (deliveryProduct) {
+        orderData.deliveryValue = Number(deliveryProduct.price) * Number(deliveryProduct.quantity);
+        // Also ensure deliveryType is set to delivery if we found a delivery fee
+        if (orderData.deliveryType !== "delivery") {
+          orderData.deliveryType = "delivery";
+        }
+      }
+    }
+
     // 2. Save Order to Database
     const newOrder = new models.orders(orderData);
     await newOrder.save();
@@ -135,6 +149,9 @@ ${productsString}
 Dirección de Entrega: ${orderData.deliveryType === 'delivery' ? orderData.deliveryAddress : 'N/A (Retiro)'}
 
 Link Maps: ${orderData.googleMapsLink || 'N/A'}
+
+Motorizado: ${orderData.deliveryPerson?.name || 'Por asignar'}
+Valor Envío: $${orderData.deliveryValue || 0}
     `.trim();
 
     // 4. Send Response
@@ -426,6 +443,51 @@ export async function updateInvoiceData(req: Request, res: Response, next: NextF
     return;
   } catch (error) {
     console.error("❌ Error in updateInvoiceData:", error);
+    res.status(HttpStatusCode.InternalServerError).send({
+      message: "Internal server error while updating order.",
+      error: error instanceof Error ? error.message : String(error)
+    });
+    return;
+  }
+}
+
+/**
+ * Update an existing order (Generic)
+ * PUT /api/orders/:id
+ */
+export async function updateOrder(req: Request, res: Response, next: NextFunction) {
+  try {
+    const { id } = req.params;
+    const updateData = req.body;
+
+    const order = await models.orders.findById(id);
+
+    if (!order) {
+      res.status(HttpStatusCode.NotFound).send({ message: "Order not found." });
+      return;
+    }
+
+    // Update recursively or specifically
+    // For now, let's allow updating delivery person and other non-sensitive fields
+    if (updateData.deliveryPerson) order.deliveryPerson = updateData.deliveryPerson;
+    if (updateData.deliveryValue !== undefined) order.deliveryValue = updateData.deliveryValue;
+    if (updateData.deliveryType) order.deliveryType = updateData.deliveryType;
+    if (updateData.branch) order.branch = updateData.branch;
+    if (updateData.comments) order.comments = updateData.comments;
+    if (updateData.customerName) order.customerName = updateData.customerName;
+    if (updateData.customerPhone) order.customerPhone = updateData.customerPhone;
+    if (updateData.deliveryAddress) order.deliveryAddress = updateData.deliveryAddress;
+    if (updateData.googleMapsLink) order.googleMapsLink = updateData.googleMapsLink;
+
+    await order.save();
+
+    res.status(HttpStatusCode.Ok).send({
+      message: "Order updated successfully.",
+      order
+    });
+    return;
+  } catch (error) {
+    console.error("❌ Error in updateOrder:", error);
     res.status(HttpStatusCode.InternalServerError).send({
       message: "Internal server error while updating order.",
       error: error instanceof Error ? error.message : String(error)
@@ -748,6 +810,164 @@ export async function settleOrderInIsland(req: Request, res: Response) {
   } catch (error) {
     console.error("Error settling order in island:", error);
     res.status(HttpStatusCode.InternalServerError).send({ message: "Internal Server Error" });
+    return;
+  }
+}
+
+/**
+ * Get delivery report with totals and grouped data
+ * GET /api/orders/reports/delivery
+ */
+export async function getDeliveryReport(req: Request, res: Response, next: NextFunction) {
+  try {
+    const { startDate, endDate, deliveryPersonId } = req.query;
+
+    if (!startDate || !endDate) {
+      res.status(HttpStatusCode.BadRequest).send({
+        message: "startDate and endDate are required parameters (YYYY-MM-DD)."
+      });
+      return;
+    }
+
+    const query: any = {
+      deliveryDate: {
+        $gte: new Date(`${startDate}T00:00:00.000Z`),
+        $lte: new Date(`${endDate}T23:59:59.999Z`)
+      }
+    };
+
+    if (deliveryPersonId) {
+      query["deliveryPerson.personId"] = deliveryPersonId;
+    }
+
+    const allOrders = await models.orders.find(query)
+      .select("orderDate deliveryDate customerName deliveryValue deliveryPerson totalValue status products deliveryType")
+      .sort({ deliveryDate: 1 });
+
+    // Filter and map orders to include those that either have a deliveryValue OR a "Delivery" product
+    const orders = allOrders.map(o => {
+      let finalDeliveryValue = o.deliveryValue || 0;
+
+      // Fallback: If deliveryValue is 0, check products for "Delivery"
+      if (finalDeliveryValue === 0 && o.products) {
+        const deliveryProduct = o.products.find((p: any) =>
+          p.name.toLowerCase().includes("delivery") || p.name.toLowerCase().includes("envío")
+        );
+        if (deliveryProduct) {
+          finalDeliveryValue = deliveryProduct.price * deliveryProduct.quantity;
+        }
+      }
+
+      return {
+        ...o.toObject(),
+        deliveryValue: finalDeliveryValue
+      };
+    }).filter(o => o.deliveryValue > 0 || o.deliveryType === 'delivery');
+
+    const total = orders.reduce((sum, o) => sum + (o.deliveryValue || 0), 0);
+
+    // Grouping by delivery person for extra clarity
+    const summaryByPerson = orders.reduce((acc: any, o: any) => {
+      const personName = o.deliveryPerson?.name || "Sin asignar";
+      if (!acc[personName]) {
+        acc[personName] = { name: personName, total: 0, count: 0 };
+      }
+      acc[personName].total += (o.deliveryValue || 0);
+      acc[personName].count += 1;
+      return acc;
+    }, {});
+
+    res.status(HttpStatusCode.Ok).send({
+      message: "Delivery report retrieved successfully.",
+      data: {
+        total: Number(total.toFixed(2)),
+        count: orders.length,
+        summary: Object.values(summaryByPerson),
+        orders
+      }
+    });
+    return;
+  } catch (error) {
+    console.error("❌ Error in getDeliveryReport:", error);
+    res.status(HttpStatusCode.InternalServerError).send({
+      message: "Error generating delivery report.",
+      error: error instanceof Error ? error.message : String(error)
+    });
+    return;
+  }
+}
+
+/**
+ * Bulk assign multiple orders to a delivery person
+ * POST /api/orders/bulk-assign
+ */
+export async function bulkAssignOrders(req: Request, res: Response, next: NextFunction) {
+  try {
+    const { orderIds, deliveryPerson } = req.body;
+
+    if (!Array.isArray(orderIds) || orderIds.length === 0) {
+      res.status(HttpStatusCode.BadRequest).send({ message: "No order IDs provided." });
+      return;
+    }
+
+    // Prepare update object
+    const update = {
+      deliveryPerson: deliveryPerson || null, // null removes assignment
+    };
+
+    const result = await models.orders.updateMany(
+      { _id: { $in: orderIds } },
+      { $set: update }
+    );
+
+    res.status(HttpStatusCode.Ok).send({
+      message: `${result.modifiedCount} orders updated successfully.`,
+      modifiedCount: result.modifiedCount
+    });
+    return;
+  } catch (error) {
+    console.error("❌ Error in bulkAssignOrders:", error);
+    res.status(HttpStatusCode.InternalServerError).send({
+      message: "Error bulk assigning orders.",
+      error: error instanceof Error ? error.message : String(error)
+    });
+    return;
+  }
+}
+
+/**
+ * Reassign all orders from one delivery person to another (or unassign)
+ * POST /api/orders/reassign-delivery
+ */
+export async function reassignDelivery(req: Request, res: Response, next: NextFunction) {
+  try {
+    const { oldPersonId, newPerson } = req.body;
+
+    if (!oldPersonId) {
+      res.status(HttpStatusCode.BadRequest).send({ message: "Old Person ID is required." });
+      return;
+    }
+
+    const update = {
+      deliveryPerson: newPerson || null
+    };
+
+    const result = await models.orders.updateMany(
+      { "deliveryPerson.personId": oldPersonId },
+      { $set: update }
+    );
+
+    res.status(HttpStatusCode.Ok).send({
+      message: `${result.modifiedCount} orders reassigned successfully.`,
+      modifiedCount: result.modifiedCount
+    });
+    return;
+  } catch (error) {
+    console.error("❌ Error in reassignDelivery:", error);
+    res.status(HttpStatusCode.InternalServerError).send({
+      message: "Error reassigning delivery.",
+      error: error instanceof Error ? error.message : String(error)
+    });
     return;
   }
 }
