@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { getProductionTasks, updateProductionTask, getItemsSummary, batchUpdateProductionTasks, registerProgress, updateItemStatus, getAllProductionOrders, registerDispatchOrder, editDispatchOrder, getProductionReports, batchRegisterDispatchOrder, registerDispatchProgress, voidOrder, restoreOrder, revertOrder, returnOrder } from "../controllers/production.controller";
+import { getProductionTasks, updateProductionTask, getItemsSummary, batchUpdateProductionTasks, registerProgress, updateItemStatus, getAllProductionOrders, registerDispatchOrder, editDispatchOrder, getProductionReports, batchRegisterDispatchOrder, registerDispatchProgress, voidOrder, restoreOrder, revertOrder, returnOrder, batchRegisterProgress } from "../controllers/production.controller";
 
 const productionRouter = Router();
 
@@ -11,6 +11,7 @@ productionRouter.get("/all-orders", getAllProductionOrders);
 productionRouter.get("/summary", getItemsSummary);
 productionRouter.patch("/batch", batchUpdateProductionTasks);
 productionRouter.post("/progress", registerProgress);
+productionRouter.post("/progress/batch", batchRegisterProgress);
 productionRouter.patch("/:id/product-status", updateItemStatus);
 productionRouter.patch("/:id", updateProductionTask);
 
