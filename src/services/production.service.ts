@@ -454,6 +454,19 @@ export class ProductionService {
     };
   }
 
+  async batchRegisterProductionProgress(items: { productName: string; quantity: number }[]) {
+    const results = [];
+    for (const item of items) {
+      try {
+        const res = await this.registerProductionProgress(item.productName, item.quantity);
+        results.push({ name: item.productName, success: true, data: res });
+      } catch (err: any) {
+        results.push({ name: item.productName, success: false, error: err.message });
+      }
+    }
+    return results;
+  }
+
   /**
    * Batch register dispatch for multiple orders.
    * Assumes full dispatch of remaining items for each order.
