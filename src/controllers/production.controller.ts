@@ -64,7 +64,8 @@ export async function batchUpdateProductionTasks(req: Request, res: Response) {
 
 export async function getItemsSummary(req: Request, res: Response) {
   try {
-    const dashboard = await productionService.getAggregatedItems();
+    const bucket = req.query.bucket as 'delayed' | 'today' | 'tomorrow' | 'future' | undefined;
+    const dashboard = await productionService.getAggregatedItems(bucket);
     res.status(HttpStatusCode.Ok).send({ message: "Dashboard retrieved", dashboard });
   } catch (error: any) {
     res.status(HttpStatusCode.InternalServerError).send({ message: "Failed", error: error.message });
