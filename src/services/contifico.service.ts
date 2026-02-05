@@ -15,6 +15,55 @@ export class ContificoService {
     }
   }
 
+  // --- CACHE DEFINITIONS ---
+  private static cachedProducts: any[] | null = null;
+  private static cachedProductsTime: number = 0;
+  private static readonly PRODUCTS_TTL = 3600 * 1000; // 1 hour
+
+  private static cachedCategories: any[] | null = null;
+  private static cachedCategoriesTime: number = 0;
+  private static readonly CATEGORIES_TTL = 3600 * 1000; // 1 hour
+
+  /**
+   * Get cached products or fetch fresh if expired.
+   * Useful for heavy dashboards.
+   */
+  async getCachedProducts(result_size: number = 2000) {
+    const now = Date.now();
+    if (ContificoService.cachedProducts && (now - ContificoService.cachedProductsTime < ContificoService.PRODUCTS_TTL)) {
+      console.log("🚀 Returning Products from Cache");
+      return ContificoService.cachedProducts;
+    }
+
+    console.log("🔄 Fetching Fresh Products for Cache...");
+    // Fetch fresh
+    const products = await this.getProducts({ result_size });
+    if (products) {
+      ContificoService.cachedProducts = products;
+      ContificoService.cachedProductsTime = now;
+    }
+    return products || [];
+  }
+
+  /**
+   * Get cached categories or fetch fresh if expired.
+   */
+  async getCachedCategories() {
+    const now = Date.now();
+    if (ContificoService.cachedCategories && (now - ContificoService.cachedCategoriesTime < ContificoService.CATEGORIES_TTL)) {
+      console.log("🚀 Returning Categories from Cache");
+      return ContificoService.cachedCategories;
+    }
+
+    console.log("🔄 Fetching Fresh Categories for Cache...");
+    const categories = await this.getCategories();
+    if (categories) {
+      ContificoService.cachedCategories = categories;
+      ContificoService.cachedCategoriesTime = now;
+    }
+    return categories || [];
+  }
+
   /**
    * Create an invoice in Contífico
    */
