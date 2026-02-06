@@ -40,7 +40,7 @@ export class ProductionService {
 
     const orders = await OrderModel.find({
       $or: [
-        { dispatchStatus: { $ne: "SENT" } },
+        { dispatchStatus: { $nin: ["SENT", "RETURNED"] } },
         {
           dispatchStatus: "SENT",
           deliveryDate: { $gte: sevenDaysAgo }
@@ -941,7 +941,8 @@ export class ProductionService {
 
     // Reset dispatch status so it moves back to "Pending Dispatch" 
     // but keep productionStage as FINISHED/COMPLETED
-    order.dispatchStatus = "NOT_SENT";
+    // UPDATE: Now setting to "RETURNED" to hide from production view completely.
+    order.dispatchStatus = "RETURNED";
 
     const returnLog = `\n[DEVOLUCIÓN ${new Date().toLocaleString('es-EC')} por ${returnData.reportedBy}]: ${returnData.notes}`;
     order.comments = (order.comments || "") + returnLog;
