@@ -235,6 +235,11 @@ export async function getOrders(req: Request, res: Response, next: NextFunction)
       query.invoiceStatus = req.query.invoiceStatus;
     }
 
+    // 4. Dispatch Status Filter (e.g. RETURNED)
+    if (req.query.dispatchStatus) {
+      query.dispatchStatus = req.query.dispatchStatus;
+    }
+
     // 3. Execution
     // If we have filters, we might want to return more than 100, or just default to a larger number.
     // For now, let's keep a limit but make it larger if searching.
@@ -998,6 +1003,43 @@ export async function reassignDelivery(req: Request, res: Response, next: NextFu
       error: error instanceof Error ? error.message : String(error)
     });
     return;
+  }
+}
+
+/**
+ * Return an order (Devolución)
+ * PUT /api/orders/:id/return
+ */
+export async function returnOrder(req: Request, res: Response) {
+  try {
+    const { id } = req.params;
+    const { notes, reportedBy } = req.body;
+
+    if (!notes) {
+      res.status(HttpStatusCode.BadRequest).send({ message: "Reason for return (notes) is required." });
+      return;
+    }
+
+    // Direct instantiation or use dependency injection if available
+    const productionService = new (require("../services/production.service").ProductionService)();
+
+    // Check if order exists first? Service handles it.
+    // Call service
+    await productionService.returnOrder(id, {
+      notes,
+      reportedBy: reportedBy || "Ventas/Web"
+    });
+
+    res.status(HttpStatusCode.Ok).send({
+      message: "Order returned successfully."
+    });
+
+  } catch (error: any) {
+    console.error("Error returning order:", error);
+    res.status(HttpStatusCode.InternalServerError).send({
+      message: "Failed to return order.",
+      error: error.message
+    });
   }
 }
 
