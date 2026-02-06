@@ -483,6 +483,12 @@ export async function updateOrder(req: Request, res: Response, next: NextFunctio
     if (updateData.deliveryAddress) order.deliveryAddress = updateData.deliveryAddress;
     if (updateData.googleMapsLink) order.googleMapsLink = updateData.googleMapsLink;
 
+    // Fix: Missing Date Fields
+    if (updateData.deliveryDate) order.deliveryDate = updateData.deliveryDate;
+    if (updateData.deliveryTime) order.deliveryTime = updateData.deliveryTime;
+    if (updateData.orderDate) order.orderDate = updateData.orderDate;
+
+
     // NEW: Allow updating core order data (products, payments)
     if (updateData.products) order.products = updateData.products;
     if (updateData.totalValue !== undefined) order.totalValue = updateData.totalValue;
