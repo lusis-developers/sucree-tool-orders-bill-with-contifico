@@ -42,4 +42,7 @@ router.get("/:id/invoice-pdf", OrderController.getInvoicePdf);
 // POST /api/orders/:id/settle-island
 router.post("/:id/settle-island", OrderController.settleOrderInIsland);
 
+// PUT /api/orders/:id/return
+router.put("/:id/return", OrderController.returnOrder);
+
 export default router;
