@@ -76,7 +76,7 @@ export interface IOrder extends Document {
 
   // Dispatch Fields
   dispatches: IDispatch[];
-  dispatchStatus: "NOT_SENT" | "PARTIAL" | "SENT" | "PROBLEM";
+  dispatchStatus: "NOT_SENT" | "PARTIAL" | "SENT" | "PROBLEM" | "RETURNED";
 
   paymentDetails?: {
     forma_cobro: string;
@@ -210,7 +210,7 @@ const OrderSchema = new Schema<IOrder>(
     dispatches: { type: [DispatchSchema], default: [] },
     dispatchStatus: {
       type: String,
-      enum: ["NOT_SENT", "PARTIAL", "SENT", "PROBLEM"],
+      enum: ["NOT_SENT", "PARTIAL", "SENT", "PROBLEM", "RETURNED"],
       default: "NOT_SENT"
     },
 

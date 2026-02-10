@@ -21,8 +21,8 @@ productionRouter.put("/:id/dispatch/:dispatchId", editDispatchOrder);
 
 // Void & Restore
 productionRouter.patch("/:id/void", voidOrder);
-productionRouter.patch("/:id/revert", revertOrder);
-productionRouter.put("/:id/return", returnOrder);
+// productionRouter.patch("/:id/revert", revertOrder);
+// productionRouter.put("/:id/return", returnOrder);
 productionRouter.patch("/:id/restore", restoreOrder);
 
 export default productionRouter;

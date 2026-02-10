@@ -2,6 +2,7 @@ import { Response, NextFunction, Request } from "express";
 import jwt from "jsonwebtoken";
 import { HttpStatusCode } from "axios";
 import { AuthRequest, JwtPayload } from "../types/AuthRequest";
+import { JWT_SECRET } from "../utils/jwt.handle";
 
 export function authMiddleware(
   req: AuthRequest,
@@ -23,7 +24,7 @@ export function authMiddleware(
   try {
     const decodedPayload = jwt.verify(
       token,
-      process.env.JWT_SECRET || "token.01010101",
+      JWT_SECRET,
     ) as JwtPayload;
     req.user = decodedPayload;
     next();

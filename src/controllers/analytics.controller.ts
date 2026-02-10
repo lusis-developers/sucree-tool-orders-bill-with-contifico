@@ -162,16 +162,42 @@ export async function getSalesByResponsible(req: Request, res: Response, next: N
   try {
     const { from, to } = req.query;
 
-    let startDate = new Date();
-    startDate.setDate(1); // Default: Start of current month
-    let endDate = new Date(); // Default: Now
+    // --- Enforce Ecuador Time (UTC-5) ---
+    // Calculate defaults based on current Ecuador time
+    const now = new Date();
+    const utc = now.getTime() + (now.getTimezoneOffset() * 60000);
+    const ecTime = new Date(utc + (3600000 * -5));
 
-    if (from) startDate = new Date(from as string);
-    if (to) endDate = new Date(to as string);
+    // Default: Start of current month in Ecuador
+    let startY = ecTime.getFullYear();
+    let startM = ecTime.getMonth() + 1;
+    let startD = 1;
 
-    // Normalize
-    startDate.setHours(0, 0, 0, 0);
-    endDate.setHours(23, 59, 59, 999);
+    // Default: Today in Ecuador
+    let endY = ecTime.getFullYear();
+    let endM = ecTime.getMonth() + 1;
+    let endD = ecTime.getDate();
+
+    // Parse Input (YYYY-MM-DD)
+    if (from && typeof from === 'string') {
+      const parts = from.split('-').map(Number);
+      if (parts.length === 3) {
+        [startY, startM, startD] = parts;
+      }
+    }
+    if (to && typeof to === 'string') {
+      const parts = to.split('-').map(Number);
+      if (parts.length === 3) {
+        [endY, endM, endD] = parts;
+      }
+    }
+
+    const pad = (n: number) => n.toString().padStart(2, '0');
+
+    // Create Date objects pointing to Ecuador time
+    // 00:00:00 Ecuador = 05:00:00 UTC
+    const startDate = new Date(`${startY}-${pad(startM)}-${pad(startD)}T00:00:00-05:00`);
+    const endDate = new Date(`${endY}-${pad(endM)}-${pad(endD)}T23:59:59.999-05:00`);
 
 
     const stats = await models.orders.aggregate([
@@ -213,8 +239,8 @@ export async function getSalesByResponsible(req: Request, res: Response, next: N
     res.status(HttpStatusCode.Ok).send({
       message: "Sales by responsible retrieved successfully.",
       range: {
-        from: startDate.toLocaleDateString(),
-        to: endDate.toLocaleDateString()
+        from: startDate.toLocaleDateString("es-EC", { timeZone: "America/Guayaquil" }),
+        to: endDate.toLocaleDateString("es-EC", { timeZone: "America/Guayaquil" })
       },
       monthlyGoal: 13000,
       stats: enhancedStats
