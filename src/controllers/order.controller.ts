@@ -69,11 +69,32 @@ export async function createOrder(req: Request, res: Response, next: NextFunctio
 
     // Calculate totalValue if missing
     if (orderData.totalValue === undefined || orderData.totalValue === null) {
-      const calculatedTotal = orderData.products.reduce((sum: number, p: any) => {
-        if (p.isCourtesy) return sum; // Free item
-        return sum + (Number(p.price) * Number(p.quantity));
-      }, 0);
-      orderData.totalValue = calculatedTotal;
+      if (orderData.isGlobalCourtesy) {
+        orderData.totalValue = 0;
+      } else {
+        const subtotal = orderData.products.reduce((sum: number, p: any) => {
+          let discount = p.isCourtesy ? 100 : 0;
+          if (orderData.globalDiscountPercentage > 0 && discount < 100) {
+            discount = orderData.globalDiscountPercentage;
+          }
+          const itemTotal = (Number(p.price) * Number(p.quantity)) * ((100 - discount) / 100);
+          return sum + itemTotal;
+        }, 0);
+
+        const iva = orderData.products.reduce((sum: number, p: any) => {
+          let discount = p.isCourtesy ? 100 : 0;
+          if (orderData.globalDiscountPercentage > 0 && discount < 100) {
+            discount = orderData.globalDiscountPercentage;
+          }
+          const isDelivery = p.name.toLowerCase().includes('delivery');
+          if (isDelivery) return sum;
+
+          const itemTotal = (Number(p.price) * Number(p.quantity)) * ((100 - discount) / 100);
+          return sum + (itemTotal * 0.15);
+        }, 0);
+
+        orderData.totalValue = Number((subtotal + iva).toFixed(2));
+      }
     }
 
     // Auto-populate deliveryValue if it's 0 but there's a "Delivery" product

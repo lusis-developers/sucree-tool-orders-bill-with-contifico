@@ -102,7 +102,14 @@ export class ContificoService {
         }
 
         // Apply Discount Logic (Courtesy = 100%)
-        const discountPercentage = p.isCourtesy ? 100 : 0;
+        let discountPercentage = p.isCourtesy ? 100 : 0;
+
+        // Apply Global Overrides
+        if (orderData.isGlobalCourtesy) {
+          discountPercentage = 100;
+        } else if (orderData.globalDiscountPercentage > 0 && discountPercentage < 100) {
+          discountPercentage = orderData.globalDiscountPercentage;
+        }
 
         // Total Line = Qty * Price * (1 - Discount/100)
         // If 100% discount, totalLine becomes 0, so it doesn't add to the invoice totals
