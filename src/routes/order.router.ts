@@ -45,4 +45,7 @@ router.post("/:id/settle-island", OrderController.settleOrderInIsland);
 // PUT /api/orders/:id/return
 router.put("/:id/return", OrderController.returnOrder);
 
+// DELETE /api/orders/:id
+router.delete("/:id", OrderController.deleteOrder);
+
 export default router;

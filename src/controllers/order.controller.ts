@@ -11,14 +11,14 @@ export async function createOrder(req: Request, res: Response, next: NextFunctio
 
     // 1. Basic Validation
     if (!orderData.customerName || !orderData.products || orderData.products.length === 0) {
-      res.status(400).send({
+      res.status(HttpStatusCode.BadRequest).send({
         message: "Customer name and products are required.",
       });
       return;
     }
 
     if (!orderData.deliveryTime) {
-      res.status(400).send({
+      res.status(HttpStatusCode.BadRequest).send({
         message: "Delivery time is required.",
       });
       return;
@@ -32,7 +32,7 @@ export async function createOrder(req: Request, res: Response, next: NextFunctio
     // STRICT VALIDATION: Delivery Requirements
     if (orderData.deliveryType === "delivery") {
       if (!orderData.googleMapsLink || !orderData.deliveryAddress) {
-        res.status(400).send({
+        res.status(HttpStatusCode.BadRequest).send({
           message: "For Delivery orders, Google Maps Link and Delivery Address are mandatory.",
         });
         return;
@@ -155,7 +155,7 @@ Valor Envío: $${orderData.deliveryValue || 0}
     `.trim();
 
     // 4. Send Response
-    res.status(201).send({
+    res.status(HttpStatusCode.Created).send({
       message: "Order created successfully.",
       order: newOrder,
       whatsappMessage
@@ -163,7 +163,7 @@ Valor Envío: $${orderData.deliveryValue || 0}
     return;
   } catch (error) {
     console.error("❌ Error in createOrder:", error);
-    res.status(500).send({
+    res.status(HttpStatusCode.InternalServerError).send({
       message: "Internal server error occurred while creating order.",
       error: error instanceof Error ? error.message : String(error)
     });
@@ -272,15 +272,15 @@ export async function getOrderById(req: Request, res: Response, next: NextFuncti
     const order = await models.orders.findById(id);
 
     if (!order) {
-      res.status(404).send({ message: "Order not found" });
+      res.status(HttpStatusCode.NotFound).send({ message: "Order not found" });
       return;
     }
 
-    res.status(200).send(order);
+    res.status(HttpStatusCode.Ok).send(order);
     return;
   } catch (error) {
     console.error("❌ Error in getOrderById:", error);
-    res.status(500).send({
+    res.status(HttpStatusCode.InternalServerError).send({
       message: "Internal server error while fetching order.",
       error: error instanceof Error ? error.message : String(error)
     });
@@ -306,7 +306,7 @@ export async function processPendingInvoices(req: Request, res: Response, next: 
     });
 
     if (totalPending === 0) {
-      res.status(200).send({ message: "No pending invoices found.", remaining: 0 });
+      res.status(HttpStatusCode.Ok).send({ message: "No pending invoices found.", remaining: 0 });
       return;
     }
 
@@ -391,7 +391,7 @@ export async function processPendingInvoices(req: Request, res: Response, next: 
     // Calculate remaining (approximate)
     const remaining = Math.max(0, totalPending - pendingOrders.length);
 
-    res.status(200).send({
+    res.status(HttpStatusCode.Ok).send({
       message: `Batch processed. ${remaining} pending invoices remaining.`,
       results,
       remaining,
@@ -401,7 +401,7 @@ export async function processPendingInvoices(req: Request, res: Response, next: 
 
   } catch (error) {
     console.error("❌ Error in processPendingInvoices:", error);
-    res.status(500).send({
+    res.status(HttpStatusCode.InternalServerError).send({
       message: "Internal server error during batch processing.",
       error: error instanceof Error ? error.message : String(error)
     });
@@ -584,7 +584,7 @@ export async function registerCollection(req: Request, res: Response, next: Next
 
     // Allow small Floating Point tolerance
     if ((currentPaid + newAmount) > (effectiveTotal + 0.10)) { // 10 cents tolerance
-      res.status(400).send({
+      res.status(HttpStatusCode.BadRequest).send({
         message: `Payment exceeds total order value. Total: ${effectiveTotal}, Paid: ${currentPaid}, Attempting: ${newAmount}`
       });
       return;
@@ -1043,3 +1043,40 @@ export async function returnOrder(req: Request, res: Response) {
   }
 }
 
+/**
+ * Delete an order permanently
+ * DELETE /api/orders/:id
+ */
+export async function deleteOrder(req: Request, res: Response, next: NextFunction) {
+  try {
+    const { id } = req.params;
+    const order = await models.orders.findById(id);
+
+    if (!order) {
+      res.status(HttpStatusCode.NotFound).send({ message: "Order not found." });
+      return;
+    }
+
+    // SAFETY CHECK: Prevent deletion if already invoiced in Contífico
+    if (order.invoiceStatus === "PROCESSED") {
+      res.status(HttpStatusCode.BadRequest).send({
+        message: "Cannot delete order. It has a processed invoice in Contífico. Void the invoice first if required."
+      });
+      return;
+    }
+
+    await models.orders.findByIdAndDelete(id);
+
+    res.status(HttpStatusCode.Ok).send({
+      message: "Order deleted successfully."
+    });
+    return;
+  } catch (error) {
+    console.error("❌ Error in deleteOrder:", error);
+    res.status(HttpStatusCode.InternalServerError).send({
+      message: "Internal server error while deleting order.",
+      error: error instanceof Error ? error.message : String(error)
+    });
+    return;
+  }
+}
