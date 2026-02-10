@@ -84,6 +84,12 @@ export class UserService {
         name: "Retail Manager",
         role: "RetailManager",
       },
+      {
+        email: "compras@nicole.com.ec",
+        password: "Nicole2020!",
+        name: "Supply Chain Manager",
+        role: "SUPPLY_CHAIN_MANAGER",
+      },
     ];
 
 
