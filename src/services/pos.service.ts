@@ -4,36 +4,59 @@ import { Types } from "mongoose";
 export class POSService {
 
   /**
-   * Retrieves all dispatches (shipments) destined for a specific branch.
-   * Flattens the result so the UI gets a list of shipments, not orders.
+   * Retrieves all orders for a specific branch.
+   * Calculates a consolidated status for the POS UI.
    */
-  async getIncomingDispatches(branch: string) {
+  async getIncomingDispatches(branch: string, filters: any = {}) {
     if (!branch) {
       throw new Error("Branch parameter is required");
     }
 
-    // Aggregation to unwind dispatches and filter by destination
-    const pipeline = [
-      { $match: { "dispatches.destination": branch } },
-      { $unwind: "$dispatches" },
-      { $match: { "dispatches.destination": branch } },
-      {
-        $project: {
-          _id: 0, // We want the dispatch _id to be the main ID if possible, or keep structure
-          orderId: "$_id",
-          orderNumber: "$orderNumber", // Assuming there is one, or just use ID
-          customerName: "$customerName",
-          deliveryDate: "$deliveryDate",
-          dispatch: "$dispatches", // The unwound dispatch object
-          // Include other order info useful for context
-          products: "$products"
-        }
-      },
-      { $sort: { "dispatch.reportedAt": -1 } } // Newest shipments first
-    ];
+    const query: any = { branch: branch };
 
-    const shipments = await models.orders.aggregate(pipeline as any);
-    return shipments;
+    // --- Search Filter ---
+    if (filters.search) {
+      const searchRegex = new RegExp(filters.search, "i");
+      query.$or = [
+        { "orderNumber": searchRegex },
+        { "customerName": searchRegex }
+      ];
+    }
+
+    // --- Date Filter (Delivery Date) ---
+    if (filters.startDate && filters.endDate) {
+      query.deliveryDate = {
+        $gte: new Date(filters.startDate),
+        $lte: new Date(filters.endDate)
+      };
+    }
+
+    // Fetch orders
+    const orders = await models.orders.find(query)
+      .sort({ deliveryDate: -1 })
+      .select("orderNumber customerName deliveryDate deliveryTime products totalValue paymentMethod status dispatches productionStage dispatchStatus")
+      .lean();
+
+    // Map to normalized POS status
+    return orders.map((order: any) => {
+      let posStatus = "NOT_SENT"; // Gray
+
+      if (order.status === "DELIVERED") {
+        posStatus = "DELIVERED"; // Green
+      } else if (order.dispatches && order.dispatches.length > 0) {
+        const allReceived = order.dispatches.every((d: any) => d.receptionStatus === "RECEIVED");
+        if (allReceived) {
+          posStatus = "RECEIVED"; // Blue
+        } else {
+          posStatus = "IN_TRANSIT"; // Yellow
+        }
+      }
+
+      return {
+        ...order,
+        posStatus
+      };
+    });
   }
 
   /**
@@ -55,11 +78,6 @@ export class POSService {
     const dispatch = order.dispatches.find((d: any) => d._id.toString() === dispatchId);
     if (!dispatch) throw new Error("Dispatch not found");
 
-    if (dispatch.receptionStatus === "RECEIVED") {
-      // Optional: Allow updating if needed? For now, let's allow it but warn or just process.
-      // User might want to correct a mistake.
-    }
-
     // Update Dispatch Header
     dispatch.receivedAt = new Date();
     dispatch.receivedBy = receptionData.receivedBy;
@@ -75,11 +93,9 @@ export class POSService {
         );
 
         if (itemInDispatch) {
-          // Update the received quantity and status
           itemInDispatch.quantityReceived = receivedItem.quantityReceived;
           itemInDispatch.itemStatus = receivedItem.itemStatus as "OK" | "MISSING" | "DAMAGED";
 
-          // Check for discrepancies
           if (
             itemInDispatch.itemStatus !== 'OK' ||
             itemInDispatch.quantityReceived !== itemInDispatch.quantitySent
@@ -90,39 +106,86 @@ export class POSService {
       });
     }
 
-    // Set Final Reception Status
     dispatch.receptionStatus = hasIssues ? "PROBLEM" : "RECEIVED";
     dispatch.modifiedAt = new Date();
-
-    // Check if other dispatches are pending to update overall Order Dispatch Status?
-    // Not strictly required by current prompt, but good practice.
-    // For now, just save.
 
     await order.save();
     return dispatch;
   }
 
   /**
-   * Get pickup orders for a specific branch.
-   * Filters by deliveryType: 'retiro' and branch.
-   * Returns active/future orders (e.g. not delivered/completed if status existed, but we'll list all for now or sort by date).
+   * Get orders for pickup for a specific branch.
    */
-  async getPickupOrders(branch: string) {
+  async getPickupOrders(branch: string, filters: any = {}) {
     if (!branch) {
       throw new Error("Branch parameter is required");
     }
 
-    // Find orders that are for pickup at this branch
-    // We can filter by date if needed (e.g. deliveryDate >= today - 1 day)
-    // For now, let's just get the recent ones (limit 50 or sort desc)
-    const orders = await models.orders.find({
-      deliveryType: "retiro",
+    const query: any = {
       branch: branch
-    })
-      .sort({ deliveryDate: 1 }) // Soonest first
-      .select("orderNumber customerName deliveryDate deliveryTime products productionStatus totalValue paymentMethod paymentDetails")
-      .limit(100);
+    };
 
-    return orders;
+    if (filters.search) {
+      const searchRegex = new RegExp(filters.search, "i");
+      query.$or = [
+        { "orderNumber": searchRegex },
+        { "customerName": searchRegex }
+      ];
+    }
+
+    if (filters.startDate && filters.endDate) {
+      query.deliveryDate = {
+        $gte: new Date(filters.startDate),
+        $lte: new Date(filters.endDate)
+      };
+    }
+
+    // Fetch all for now, we'll filter by "RECEIVED" if requested or let controller/frontend do it
+    const orders = await models.orders.find(query)
+      .sort({ deliveryDate: 1 })
+      .select("orderNumber customerName deliveryDate deliveryTime products productionStatus totalValue paymentMethod paymentDetails status dispatches")
+      .lean();
+
+    return orders.map((order: any) => {
+      let posStatus = "NOT_SENT";
+      if (order.status === "DELIVERED") {
+        posStatus = "DELIVERED";
+      } else if (order.dispatches && order.dispatches.length > 0) {
+        const allReceived = order.dispatches.every((d: any) => d.receptionStatus === "RECEIVED");
+        if (allReceived) {
+          posStatus = "RECEIVED";
+        } else {
+          posStatus = "IN_TRANSIT";
+        }
+      }
+
+      return {
+        ...order,
+        posStatus
+      };
+    });
+  }
+
+  /**
+   * Mark a pickup order as delivered.
+   */
+  async markAsDelivered(orderId: string) {
+    if (!Types.ObjectId.isValid(orderId)) {
+      throw new Error("Invalid order ID format");
+    }
+
+    const order = await models.orders.findById(orderId);
+    if (!order) throw new Error("Order not found");
+
+    // Skip step logic: If not received, we just proced. 
+    // We could automatically mark dispatches as received here if we want to be strict,
+    // but the user says "indicar que se saltara un paso", so we just set status to DELIVERED.
+
+    order.status = "DELIVERED";
+    // Also update production stage or dispatch status if needed? 
+    // For now, let's keep it focused on the top-level status.
+
+    await order.save();
+    return order;
   }
 }

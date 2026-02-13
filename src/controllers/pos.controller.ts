@@ -1,7 +1,7 @@
 import type { Request, Response } from "express";
 import { HttpStatusCode } from "axios";
 import { POSService } from "../services/pos.service";
-import { AuthRequest } from "../types/AuthRequest";
+import { getEcuadorDateRange } from "../utils/date.utils";
 
 const posService = new POSService();
 
@@ -11,14 +11,23 @@ const posService = new POSService();
  */
 export async function getIncomingDispatches(req: Request, res: Response) {
   try {
-    const { branch } = req.query;
+    const { branch, search, filterMode, date } = req.query;
 
     if (!branch) {
       res.status(HttpStatusCode.BadRequest).send({ message: "Branch parameter is required." });
       return;
     }
 
-    const dispatches = await posService.getIncomingDispatches(branch as string);
+    const filters: any = { search: search as string };
+
+    // --- Date Calculation Logic ---
+    const range = getEcuadorDateRange(filterMode as string, date as string);
+    if (range) {
+      filters.startDate = range.startDate.toISOString();
+      filters.endDate = range.endDate.toISOString();
+    }
+
+    const dispatches = await posService.getIncomingDispatches(branch as string, filters);
 
     res.status(HttpStatusCode.Ok).send({
       message: "Incoming dispatches retrieved successfully.",
@@ -37,14 +46,8 @@ export async function getIncomingDispatches(req: Request, res: Response) {
  */
 export async function confirmReception(req: Request, res: Response) {
   try {
-    // Cast req to AuthRequest if we want to use req.user, but for now we trust body or auth middleware
     const { orderId, dispatchId } = req.params;
     const { receivedBy, receptionNotes, items } = req.body;
-
-    // Fallback to logged in user name if available?
-    // const user = (req as AuthRequest).user;
-    // const effectiveReceivedBy = receivedBy || (user ? user.name : "POS Admin");
-    // However, prompts typically stick to explicit body params if defined.
 
     if (!items || !Array.isArray(items)) {
       res.status(HttpStatusCode.BadRequest).send({ message: "Items array is required for reception confirmation." });
@@ -73,14 +76,28 @@ export async function confirmReception(req: Request, res: Response) {
  */
 export async function getPickupOrders(req: Request, res: Response) {
   try {
-    const { branch } = req.query;
+    const { branch, search, filterMode, date, receivedOnly } = req.query;
 
     if (!branch) {
       res.status(HttpStatusCode.BadRequest).send({ message: "Branch parameter is required." });
       return;
     }
 
-    const orders = await posService.getPickupOrders(branch as string);
+    const filters: any = { search: search as string };
+
+    // --- Date Calculation Logic ---
+    const range = getEcuadorDateRange(filterMode as string, date as string);
+    if (range) {
+      filters.startDate = range.startDate.toISOString();
+      filters.endDate = range.endDate.toISOString();
+    }
+
+    let orders = await posService.getPickupOrders(branch as string, filters);
+
+    // Apply "Received" filter if requested
+    if (receivedOnly === "true") {
+      orders = orders.filter((o: any) => o.posStatus === "RECEIVED");
+    }
 
     res.status(HttpStatusCode.Ok).send({
       message: "Pickup orders retrieved successfully.",
@@ -90,5 +107,24 @@ export async function getPickupOrders(req: Request, res: Response) {
   } catch (error: any) {
     console.error("Error retrieving pickup orders:", error);
     res.status(HttpStatusCode.InternalServerError).send({ message: "Failed to retrieve pickup orders.", error: error.message });
+  }
+}
+
+/**
+ * PUT /api/pos/pickups/:orderId/deliver
+ */
+export async function deliverPickupOrder(req: Request, res: Response) {
+  try {
+    const { orderId } = req.params;
+
+    const result = await posService.markAsDelivered(orderId);
+
+    res.status(HttpStatusCode.Ok).send({
+      message: "Order marked as delivered successfully.",
+      data: result
+    });
+  } catch (error: any) {
+    console.error("Error delivering pickup order:", error);
+    res.status(HttpStatusCode.InternalServerError).send({ message: "Failed to mark order as delivered.", error: error.message });
   }
 }

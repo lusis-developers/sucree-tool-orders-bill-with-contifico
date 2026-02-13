@@ -6,15 +6,15 @@ export interface IOrderProduct {
   quantity: number;
   price: number;
   contifico_id?: string;
-  produced?: number; // Track how many items have been produced
+  produced?: number;
   productionStatus?: "PENDING" | "IN_PROCESS" | "COMPLETED";
   productionNotes?: string;
   isCourtesy?: boolean;
 }
 
 export interface IDispatchItem {
-  productId: string; // The _id of the product in the products array
-  name: string;      // Snapshot of name for UI ease
+  productId: string;
+  name: string;
   quantitySent: number;
   quantityReceived?: number;
   itemStatus?: "OK" | "MISSING" | "DAMAGED";
@@ -24,10 +24,10 @@ export interface IDispatch {
   _id: Types.ObjectId;
   reportedAt: Date;
   modifiedAt: Date;
-  destination: string; // e.g. "San Marino", "Delivery @ Address"
+  destination: string;
   items: IDispatchItem[];
   notes?: string;
-  reportedBy: string; // e.g. "Production User"
+  reportedBy: string;
 
   // Reception Fields
   receptionStatus: "PENDING" | "RECEIVED" | "PROBLEM";
@@ -37,7 +37,6 @@ export interface IDispatch {
 }
 
 export interface IOrder extends Document {
-  // ... existing fields ...
   deliveryPerson?: {
     name: string;
     identification: string;
@@ -100,6 +99,7 @@ export interface IOrder extends Document {
     reference?: string;
     status?: string;
   }>;
+  status?: string; // Top level status (e.g. DELIVERED)
   createdAt: Date;
   updatedAt: Date;
 }
@@ -217,6 +217,8 @@ const OrderSchema = new Schema<IOrder>(
       enum: ["NOT_SENT", "PARTIAL", "SENT", "PROBLEM", "RETURNED"],
       default: "NOT_SENT"
     },
+
+    status: { type: String }, // New top level status
 
     paymentDetails: {
       forma_cobro: String,
