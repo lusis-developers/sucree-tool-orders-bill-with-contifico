@@ -13,11 +13,6 @@ export async function getIncomingDispatches(req: Request, res: Response) {
   try {
     const { branch, search, filterMode, date } = req.query;
 
-    if (!branch) {
-      res.status(HttpStatusCode.BadRequest).send({ message: "Branch parameter is required." });
-      return;
-    }
-
     const filters: any = { search: search as string };
 
     // --- Date Calculation Logic ---
@@ -77,11 +72,6 @@ export async function confirmReception(req: Request, res: Response) {
 export async function getPickupOrders(req: Request, res: Response) {
   try {
     const { branch, search, filterMode, date, receivedOnly } = req.query;
-
-    if (!branch) {
-      res.status(HttpStatusCode.BadRequest).send({ message: "Branch parameter is required." });
-      return;
-    }
 
     const filters: any = { search: search as string };
 

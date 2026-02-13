@@ -7,12 +7,11 @@ export class POSService {
    * Retrieves all orders for a specific branch.
    * Calculates a consolidated status for the POS UI.
    */
-  async getIncomingDispatches(branch: string, filters: any = {}) {
-    if (!branch) {
-      throw new Error("Branch parameter is required");
+  async getIncomingDispatches(branch?: string, filters: any = {}) {
+    const query: any = {};
+    if (branch && branch !== 'Todas las sucursales') {
+      query.branch = branch;
     }
-
-    const query: any = { branch: branch };
 
     // --- Search Filter ---
     if (filters.search) {
@@ -34,7 +33,7 @@ export class POSService {
     // Fetch orders
     const orders = await models.orders.find(query)
       .sort({ deliveryDate: -1 })
-      .select("orderNumber customerName deliveryDate deliveryTime products totalValue paymentMethod status dispatches payments settledInIsland isGlobalCourtesy globalDiscountPercentage")
+      .select("orderNumber customerName deliveryDate deliveryTime products totalValue paymentMethod status dispatches payments settledInIsland isGlobalCourtesy globalDiscountPercentage branch")
       .lean();
 
     // Map to normalized POS status
@@ -116,14 +115,11 @@ export class POSService {
   /**
    * Get orders for pickup for a specific branch.
    */
-  async getPickupOrders(branch: string, filters: any = {}) {
-    if (!branch) {
-      throw new Error("Branch parameter is required");
+  async getPickupOrders(branch?: string, filters: any = {}) {
+    const query: any = {};
+    if (branch && branch !== 'Todas las sucursales') {
+      query.branch = branch;
     }
-
-    const query: any = {
-      branch: branch
-    };
 
     if (filters.search) {
       const searchRegex = new RegExp(filters.search, "i");
@@ -143,7 +139,7 @@ export class POSService {
     // Fetch all for now, we'll filter by "RECEIVED" if requested or let controller/frontend do it
     const orders = await models.orders.find(query)
       .sort({ deliveryDate: 1 })
-      .select("orderNumber customerName deliveryDate deliveryTime products productionStatus totalValue paymentMethod paymentDetails payments status dispatches settledInIsland isGlobalCourtesy globalDiscountPercentage")
+      .select("orderNumber customerName deliveryDate deliveryTime products productionStatus totalValue paymentMethod paymentDetails payments status dispatches settledInIsland isGlobalCourtesy globalDiscountPercentage branch")
       .lean();
 
     return orders.map((order: any) => {
