@@ -34,7 +34,7 @@ export class POSService {
     // Fetch orders
     const orders = await models.orders.find(query)
       .sort({ deliveryDate: -1 })
-      .select("orderNumber customerName deliveryDate deliveryTime products totalValue paymentMethod status dispatches productionStage dispatchStatus")
+      .select("orderNumber customerName deliveryDate deliveryTime products totalValue paymentMethod status dispatches payments settledInIsland isGlobalCourtesy globalDiscountPercentage")
       .lean();
 
     // Map to normalized POS status
@@ -143,7 +143,7 @@ export class POSService {
     // Fetch all for now, we'll filter by "RECEIVED" if requested or let controller/frontend do it
     const orders = await models.orders.find(query)
       .sort({ deliveryDate: 1 })
-      .select("orderNumber customerName deliveryDate deliveryTime products productionStatus totalValue paymentMethod paymentDetails status dispatches")
+      .select("orderNumber customerName deliveryDate deliveryTime products productionStatus totalValue paymentMethod paymentDetails payments status dispatches settledInIsland isGlobalCourtesy globalDiscountPercentage")
       .lean();
 
     return orders.map((order: any) => {
