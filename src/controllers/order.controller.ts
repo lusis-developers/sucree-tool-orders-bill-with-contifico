@@ -2,6 +2,7 @@ import type { Request, Response, NextFunction } from "express";
 import { HttpStatusCode } from "axios";
 import { models } from "../models";
 import { ContificoService } from "../services/contifico.service";
+import { getECDateRange } from "../utils/date.utils";
 
 const contificoService = new ContificoService();
 
@@ -210,25 +211,18 @@ export async function getOrders(req: Request, res: Response, next: NextFunction)
       ];
     }
 
-    // 2. Date Filter (deliveryDate or createdAt)
+    // Date Filters
     if (startDate || endDate) {
-      const dateField = req.query.dateType === 'createdAt' ? 'createdAt' : 'deliveryDate';
+      const dateType = req.query.dateType as string;
+      const dateField = dateType === 'createdAt' ? 'createdAt' : 'deliveryDate';
+      const isFullTimestamp = dateField === 'createdAt';
       query[dateField] = {};
 
       if (startDate) {
         const s = String(startDate);
         if (/^\d{4}-\d{2}-\d{2}$/.test(s)) {
-          const [y, m, d] = s.split('-').map(Number);
-          // Standardize to UTC-5 boundaries (Ecuador)
-          // Since deliveryDate is stored as UTC 00:00, Date.UTC(y, m-1, d) is perfect.
-          // Since createdAt is full timestamp, Date.UTC(y, m-1, d, 5, 0, 0) would be 00:00 ECT.
-          // However, for simplicity and breadth, let's keep it consistent with the logic used for deliveryDate.
-          if (dateField === 'deliveryDate') {
-            query[dateField].$gte = new Date(Date.UTC(y, m - 1, d, 0, 0, 0, 0));
-          } else {
-            // For createdAt, we want 00:00:00 local EC (which is 05:00:00 UTC)
-            query[dateField].$gte = new Date(Date.UTC(y, m - 1, d, 5, 0, 0, 0));
-          }
+          const { startDate: startRange } = getECDateRange(s, isFullTimestamp);
+          query[dateField].$gte = startRange;
         } else {
           query[dateField].$gte = new Date(s);
         }
@@ -236,13 +230,8 @@ export async function getOrders(req: Request, res: Response, next: NextFunction)
       if (endDate) {
         const e = String(endDate);
         if (/^\d{4}-\d{2}-\d{2}$/.test(e)) {
-          const [y, m, d] = e.split('-').map(Number);
-          if (dateField === 'deliveryDate') {
-            query[dateField].$lte = new Date(Date.UTC(y, m - 1, d, 23, 59, 59, 999));
-          } else {
-            // End of day EC = 04:59:59 UTC next day
-            query[dateField].$lte = new Date(Date.UTC(y, m - 1, d, 23, 59, 59, 999) + (5 * 3600000));
-          }
+          const { endDate: endRange } = getECDateRange(e, isFullTimestamp);
+          query[dateField].$lte = endRange;
         } else {
           const eDate = new Date(e);
           eDate.setHours(23, 59, 59, 999);

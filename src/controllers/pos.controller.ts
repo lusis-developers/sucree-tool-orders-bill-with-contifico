@@ -1,7 +1,7 @@
 import type { Request, Response } from "express";
 import { HttpStatusCode } from "axios";
 import { POSService } from "../services/pos.service";
-import { getEcuadorDateRange } from "../utils/date.utils";
+import { getECDateRange, getEcuadorNow } from "../utils/date.utils";
 
 const posService = new POSService();
 
@@ -16,11 +16,25 @@ export async function getIncomingDispatches(req: Request, res: Response) {
     const filters: any = { search: search as string };
 
     // --- Date Calculation Logic ---
-    const range = getEcuadorDateRange(filterMode as string, date as string);
-    if (range) {
-      filters.startDate = range.startDate.toISOString();
-      filters.endDate = range.endDate.toISOString();
+    let { startDate, endDate } = getECDateRange(getEcuadorNow().toISOString().split('T')[0], false);
+
+    if (date) {
+      const range = getECDateRange(String(date), false);
+      startDate = range.startDate;
+      endDate = range.endDate;
+    } else if (filterMode === 'tomorrow') {
+      const tomorrow = getEcuadorNow();
+      tomorrow.setDate(tomorrow.getDate() + 1);
+      const range = getECDateRange(tomorrow.toISOString().split('T')[0], false);
+      startDate = range.startDate;
+      endDate = range.endDate;
+    } else if (filterMode === 'all') {
+      startDate = new Date(0);
+      endDate = new Date(2100, 0, 1);
     }
+
+    filters.startDate = startDate.toISOString();
+    filters.endDate = endDate.toISOString();
 
     const dispatches = await posService.getIncomingDispatches(branch as string, filters);
 
@@ -75,12 +89,25 @@ export async function getPickupOrders(req: Request, res: Response) {
 
     const filters: any = { search: search as string };
 
-    // --- Date Calculation Logic ---
-    const range = getEcuadorDateRange(filterMode as string, date as string);
-    if (range) {
-      filters.startDate = range.startDate.toISOString();
-      filters.endDate = range.endDate.toISOString();
+    let { startDate, endDate } = getECDateRange(getEcuadorNow().toISOString().split('T')[0], false);
+
+    if (date) {
+      const range = getECDateRange(String(date), false);
+      startDate = range.startDate;
+      endDate = range.endDate;
+    } else if (filterMode === 'tomorrow') {
+      const tomorrow = getEcuadorNow();
+      tomorrow.setDate(tomorrow.getDate() + 1);
+      const range = getECDateRange(tomorrow.toISOString().split('T')[0], false);
+      startDate = range.startDate;
+      endDate = range.endDate;
+    } else if (filterMode === 'all') {
+      startDate = new Date(0);
+      endDate = new Date(2100, 0, 1);
     }
+
+    filters.startDate = startDate.toISOString();
+    filters.endDate = endDate.toISOString();
 
     let orders = await posService.getPickupOrders(branch as string, filters);
 
