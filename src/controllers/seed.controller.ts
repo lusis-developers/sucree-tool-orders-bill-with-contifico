@@ -8,7 +8,7 @@ export async function seedSupplyChain(req: Request, res: Response, next: NextFun
     await Promise.all([
       models.rawMaterials.deleteMany({}),
       models.providers.deleteMany({}),
-      models.providerCategories.deleteMany({})
+      models.providers.deleteMany({})
     ]);
 
     // 2. Create a default provider
