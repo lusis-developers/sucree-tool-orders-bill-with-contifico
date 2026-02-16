@@ -10,6 +10,7 @@ export interface IRawMaterial extends Document {
   cost: number; // Unit cost (auto-calculated)
   wastePercentage: number; // 0-100%
   minStock: number;
+  maxStock: number;
   provider?: Types.ObjectId;
   category?: string;
 
@@ -64,6 +65,11 @@ const RawMaterialSchema = new Schema<IRawMaterial>(
       default: 0,
     },
     minStock: {
+      type: Number,
+      required: false,
+      default: 0,
+    },
+    maxStock: {
       type: Number,
       required: false,
       default: 0,
