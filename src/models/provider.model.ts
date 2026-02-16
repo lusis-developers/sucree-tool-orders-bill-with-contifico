@@ -14,7 +14,6 @@ export interface IProvider extends Document {
   phone?: string;
   address?: string;
   ruc?: string;
-  category?: Types.ObjectId;
   commercialAgents: ICommercialAgent[];
 }
 
@@ -53,10 +52,6 @@ const ProviderSchema = new Schema<IProvider>(
     ruc: {
       type: String,
       trim: true,
-    },
-    category: {
-      type: Schema.Types.ObjectId,
-      ref: "ProviderCategory",
     },
     commercialAgents: [CommercialAgentSchema],
   },
