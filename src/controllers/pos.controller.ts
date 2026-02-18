@@ -22,6 +22,12 @@ export async function getIncomingDispatches(req: Request, res: Response) {
       const range = getECDateRange(String(date), false);
       startDate = range.startDate;
       endDate = range.endDate;
+    } else if (filterMode === 'yesterday') {
+      const yesterday = getEcuadorNow();
+      yesterday.setDate(yesterday.getDate() - 1);
+      const range = getECDateRange(yesterday.toISOString().split('T')[0], false);
+      startDate = range.startDate;
+      endDate = range.endDate;
     } else if (filterMode === 'tomorrow') {
       const tomorrow = getEcuadorNow();
       tomorrow.setDate(tomorrow.getDate() + 1);
@@ -93,6 +99,12 @@ export async function getPickupOrders(req: Request, res: Response) {
 
     if (date) {
       const range = getECDateRange(String(date), false);
+      startDate = range.startDate;
+      endDate = range.endDate;
+    } else if (filterMode === 'yesterday') {
+      const yesterday = getEcuadorNow();
+      yesterday.setDate(yesterday.getDate() - 1);
+      const range = getECDateRange(yesterday.toISOString().split('T')[0], false);
       startDate = range.startDate;
       endDate = range.endDate;
     } else if (filterMode === 'tomorrow') {
