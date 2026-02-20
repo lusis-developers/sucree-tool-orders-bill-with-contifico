@@ -179,9 +179,7 @@ const OrderSchema = new Schema<IOrder>(
     invoiceStatus: {
       type: String,
       enum: ["PENDING", "PROCESSED", "ERROR"],
-      default: function () {
-        return this.invoiceNeeded ? "PENDING" : undefined;
-      }
+      default: undefined,
     },
     responsible: {
       type: String,

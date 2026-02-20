@@ -184,4 +184,5 @@ export class POSService {
     await order.save();
     return order;
   }
+
 }

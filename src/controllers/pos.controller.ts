@@ -1,9 +1,11 @@
 import type { Request, Response } from "express";
 import { HttpStatusCode } from "axios";
 import { POSService } from "../services/pos.service";
+import { POSRestockService } from "../services/pos-restock.service";
 import { getECDateRange, getEcuadorNow } from "../utils/date.utils";
 
 const posService = new POSService();
+const posRestockService = new POSRestockService();
 
 /**
  * GET /api/pos/dispatches
@@ -155,5 +157,124 @@ export async function deliverPickupOrder(req: Request, res: Response) {
   } catch (error: any) {
     console.error("Error delivering pickup order:", error);
     res.status(HttpStatusCode.InternalServerError).send({ message: "Failed to mark order as delivered.", error: error.message });
+  }
+}
+
+
+/**
+ * GET /api/pos/restock/objectives?branch=X
+ */
+export async function getRestockObjectives(req: Request, res: Response): Promise<void> {
+  try {
+    const { branch } = req.query;
+    if (!branch) {
+      res.status(HttpStatusCode.BadRequest).send({ message: "branch query param is required." });
+      return;
+    }
+    const data = await posRestockService.getObjectives(branch as string);
+    res.status(HttpStatusCode.Ok).send({ message: "Objectives retrieved.", count: data.length, data });
+  } catch (error: any) {
+    console.error("Error retrieving restock objectives:", error);
+    res.status(HttpStatusCode.InternalServerError).send({ message: "Failed to retrieve objectives.", error: error.message });
+  }
+}
+
+/**
+ * POST /api/pos/restock/objectives
+ * Body: { branch, productName, unit, contificoId?, objectives: { Mon, Tue, Wed, Thu, Fri, Sat, Sun } }
+ */
+export async function upsertRestockObjective(req: Request, res: Response): Promise<void> {
+  try {
+    const { branch, productName, unit, contificoId, objectives } = req.body;
+    if (!branch || !productName || !unit || !objectives) {
+      res.status(HttpStatusCode.BadRequest).send({ message: "branch, productName, unit, and objectives are required." });
+      return;
+    }
+    const data = await posRestockService.upsertObjective({ branch, productName, unit, contificoId, objectives });
+    res.status(HttpStatusCode.Ok).send({ message: "Objective saved.", data });
+  } catch (error: any) {
+    console.error("Error upserting restock objective:", error);
+    res.status(HttpStatusCode.InternalServerError).send({ message: "Failed to save objective.", error: error.message });
+  }
+}
+
+/**
+ * DELETE /api/pos/restock/objectives/:productName?branch=X
+ */
+export async function deleteRestockObjective(req: Request, res: Response): Promise<void> {
+  try {
+    const { branch } = req.query;
+    const { productName } = req.params;
+
+    if (!branch || !productName) {
+      res.status(HttpStatusCode.BadRequest).send({ message: "branch query param and productName path param are required." });
+      return;
+    }
+
+    const deleted = await posRestockService.deleteObjective(branch as string, productName);
+
+    if (deleted) {
+      res.status(HttpStatusCode.Ok).send({ message: "Re-stock configuration deleted successfully." });
+    } else {
+      res.status(HttpStatusCode.NotFound).send({ message: "Configuration not found." });
+    }
+  } catch (error: any) {
+    console.error("Error deleting restock objective:", error);
+    res.status(HttpStatusCode.InternalServerError).send({ message: "Failed to delete objective.", error: error.message });
+  }
+}
+
+/**
+ * GET /api/pos/restock/daily-form?branch=X&date=YYYY-MM-DD
+ */
+export async function getRestockDailyForm(req: Request, res: Response): Promise<void> {
+  try {
+    const { branch, date } = req.query;
+    if (!branch) {
+      res.status(HttpStatusCode.BadRequest).send({ message: "branch query param is required." });
+      return;
+    }
+    const data = await posRestockService.getDailyForm(branch as string, date as string | undefined);
+    res.status(HttpStatusCode.Ok).send({ message: "Daily form retrieved.", data });
+  } catch (error: any) {
+    console.error("Error retrieving daily form:", error);
+    res.status(HttpStatusCode.InternalServerError).send({ message: "Failed to retrieve daily form.", error: error.message });
+  }
+}
+
+/**
+ * POST /api/pos/restock/daily-entry
+ * Body: { branch, date, submittedBy, items: [{ productName, bajas, bajasNote?, stockFinal }] }
+ */
+export async function submitRestockDailyEntry(req: Request, res: Response): Promise<void> {
+  try {
+    const { branch, date, submittedBy, items } = req.body;
+    if (!branch || !date || !submittedBy || !Array.isArray(items)) {
+      res.status(HttpStatusCode.BadRequest).send({ message: "branch, date, submittedBy, and items[] are required." });
+      return;
+    }
+    const data = await posRestockService.submitDailyEntry(branch, date, items, submittedBy);
+    res.status(HttpStatusCode.Ok).send({ message: "Daily entry submitted.", data });
+  } catch (error: any) {
+    console.error("Error submitting daily entry:", error);
+    res.status(HttpStatusCode.InternalServerError).send({ message: "Failed to submit daily entry.", error: error.message });
+  }
+}
+
+/**
+ * GET /api/pos/restock/history?branch=X&from=YYYY-MM-DD&to=YYYY-MM-DD
+ */
+export async function getRestockHistory(req: Request, res: Response): Promise<void> {
+  try {
+    const { branch, from, to } = req.query;
+    if (!branch || !from || !to) {
+      res.status(HttpStatusCode.BadRequest).send({ message: "branch, from, and to query params are required." });
+      return;
+    }
+    const data = await posRestockService.getHistory(branch as string, from as string, to as string);
+    res.status(HttpStatusCode.Ok).send({ message: "History retrieved.", count: data.length, data });
+  } catch (error: any) {
+    console.error("Error retrieving restock history:", error);
+    res.status(HttpStatusCode.InternalServerError).send({ message: "Failed to retrieve history.", error: error.message });
   }
 }

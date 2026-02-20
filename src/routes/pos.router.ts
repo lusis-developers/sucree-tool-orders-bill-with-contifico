@@ -1,5 +1,16 @@
 import express from "express";
-import { getIncomingDispatches, confirmReception, getPickupOrders, deliverPickupOrder } from "../controllers/pos.controller";
+import {
+  getIncomingDispatches,
+  confirmReception,
+  getPickupOrders,
+  deliverPickupOrder,
+  getRestockObjectives,
+  upsertRestockObjective,
+  getRestockDailyForm,
+  submitRestockDailyEntry,
+  getRestockHistory,
+  deleteRestockObjective,
+} from "../controllers/pos.controller";
 import { authMiddleware } from "../middlewares/auth.middleware";
 
 const router = express.Router();
@@ -18,5 +29,13 @@ router.get("/pickups", getPickupOrders);
 
 // PUT /api/pos/pickups/:orderId/deliver
 router.put("/pickups/:orderId/deliver", deliverPickupOrder);
+
+// Restock — physical count system
+router.get("/restock/objectives", getRestockObjectives);
+router.post("/restock/objectives", upsertRestockObjective);
+router.delete("/restock/objectives/:productName", deleteRestockObjective);
+router.get("/restock/daily-form", getRestockDailyForm);
+router.post("/restock/daily-entry", submitRestockDailyEntry);
+router.get("/restock/history", getRestockHistory);
 
 export default router;
