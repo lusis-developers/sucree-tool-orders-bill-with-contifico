@@ -11,6 +11,7 @@ import ReplenishmentRouter from "./replenishment.router";
 import DeliveryPersonRouter from "./delivery-person.router";
 import ProviderRouter from "./provider.router";
 import RawMaterialRouter from "./raw-material.router";
+import SupplierOrderRouter from "./supplier-order.router";
 
 
 import { WarehouseRouter } from "./warehouse.routes";
@@ -30,6 +31,7 @@ function routerApi(app: Application) {
   router.use("/delivery-personnel", DeliveryPersonRouter);
   router.use("/providers", ProviderRouter);
   router.use("/raw-materials", RawMaterialRouter);
+  router.use("/supplier-orders", SupplierOrderRouter);
 
   router.use("/warehouse", WarehouseRouter);
 }

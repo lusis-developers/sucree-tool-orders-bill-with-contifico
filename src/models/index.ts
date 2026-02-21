@@ -8,7 +8,7 @@ import { RawMaterialModel } from "./raw-material.model";
 import { POSStockObjectiveModel } from "./pos-stock-objective.model";
 import { POSDailyEntryModel } from "./pos-daily-entry.model";
 import { POSLossModel } from "./pos-loss.model";
-
+import { SupplierOrderModel } from "./supplier-order.model";
 
 export const models = {
   orders: OrderModel,
@@ -21,4 +21,5 @@ export const models = {
   posStockObjectives: POSStockObjectiveModel,
   posDailyEntries: POSDailyEntryModel,
   posLosses: POSLossModel,
+  supplierOrders: SupplierOrderModel,
 };

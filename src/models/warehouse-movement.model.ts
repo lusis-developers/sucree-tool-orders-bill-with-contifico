@@ -1,13 +1,16 @@
 import { Schema, model, Document, Types } from "mongoose";
 
 export interface IWarehouseMovement extends Document {
-  type: "IN" | "OUT";
+  type: "IN" | "OUT" | "LOSS";
   rawMaterial: Types.ObjectId;
-  quantity: number; // Always positive
+  quantity: number; // Always positive, stored in backend units (g / ml / unit)
+  unitCost?: number; // Cost per backend unit (USD/g or USD/ml) at the time of movement
+  totalValue?: number; // Pre-computed total (USD) = qty_display * unitCost_display
   date: Date;
   provider?: Types.ObjectId; // For IN
   entity?: string; // For OUT
   user: Types.ObjectId;
+  responsible?: string; // Who received or delivered
   observation?: string;
 }
 
@@ -15,7 +18,7 @@ const WarehouseMovementSchema = new Schema<IWarehouseMovement>(
   {
     type: {
       type: String,
-      enum: ["IN", "OUT"],
+      enum: ["IN", "OUT", "LOSS"],
       required: true,
     },
     rawMaterial: {
@@ -27,6 +30,17 @@ const WarehouseMovementSchema = new Schema<IWarehouseMovement>(
       type: Number,
       required: true,
       min: 0,
+    },
+    unitCost: {
+      type: Number,
+      min: 0,
+      // Cost per backend unit (USD/g or USD/ml) paid at the time of this movement.
+      // Allows auditing price deviations from the catalog cost.
+    },
+    totalValue: {
+      type: Number,
+      min: 0,
+      // Total USD value of this movement. Stored for instant reporting.
     },
     date: {
       type: Date,
@@ -54,6 +68,10 @@ const WarehouseMovementSchema = new Schema<IWarehouseMovement>(
       ref: "User",
       required: true,
     },
+    responsible: {
+      type: String,
+      trim: true,
+    },
     observation: {
       type: String,
       trim: true,
@@ -65,4 +83,7 @@ const WarehouseMovementSchema = new Schema<IWarehouseMovement>(
   }
 );
 
-export const WarehouseMovementModel = model<IWarehouseMovement>("WarehouseMovement", WarehouseMovementSchema);
+export const WarehouseMovementModel = model<IWarehouseMovement>(
+  "WarehouseMovement",
+  WarehouseMovementSchema
+);
