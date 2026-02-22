@@ -1,10 +1,11 @@
 import type { Request, Response, NextFunction } from "express";
 import { UserService } from "../services/user.service";
+import { AuthRequest } from "../types/AuthRequest";
 
 const userService = new UserService();
 
 export async function createUser(
-  req: Request,
+  req: AuthRequest,
   res: Response,
   next: NextFunction
 ) {
@@ -18,12 +19,27 @@ export async function createUser(
 }
 
 export async function getAllUsers(
-  req: Request,
+  req: AuthRequest,
   res: Response,
   next: NextFunction
 ) {
   try {
-    const users = await userService.findAll();
+    const currentUser = req.user;
+    let users = await userService.findAll();
+
+    // Data isolation for Sales Manager
+    if (currentUser?.role === "SALES_MANAGER") {
+      users = users.filter((u) => u.role === "SALES_REP");
+    } else if (currentUser?.role !== "admin") {
+      // If not admin or sales manager, they shouldn't be listing users anyway
+      // but if the route is open, we filter to empty or self
+      if (currentUser) {
+        users = users.filter((u) => u.email === currentUser.email);
+      } else {
+        users = [];
+      }
+    }
+
     res.status(200).send(users);
     return;
   } catch (error) {
@@ -45,6 +61,36 @@ export async function login(
       res.status(401).send({ message: error.message });
       return;
     }
+    next(error);
+  }
+}
+
+export async function updateUser(
+  req: AuthRequest,
+  res: Response,
+  next: NextFunction
+) {
+  try {
+    const { id } = req.params;
+    const user = await userService.updateUser(id, req.body);
+    res.status(200).send(user);
+    return;
+  } catch (error) {
+    next(error);
+  }
+}
+
+export async function deleteUser(
+  req: AuthRequest,
+  res: Response,
+  next: NextFunction
+) {
+  try {
+    const { id } = req.params;
+    await userService.deleteUser(id);
+    res.status(200).send({ message: "USER_DELETED" });
+    return;
+  } catch (error) {
     next(error);
   }
 }

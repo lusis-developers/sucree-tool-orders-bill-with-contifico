@@ -1,14 +1,28 @@
-import type { Request, Response, NextFunction } from "express";
+import { Request, Response, NextFunction } from "express";
 import { HttpStatusCode } from "axios";
 import { models } from "../models";
 import { ContificoService } from "../services/contifico.service";
 import { getECDateRange } from "../utils/date.utils";
+import { AuthRequest } from "../types/AuthRequest";
 
 const contificoService = new ContificoService();
 
-export async function createOrder(req: Request, res: Response, next: NextFunction) {
+export async function createOrder(req: AuthRequest, res: Response, next: NextFunction) {
   try {
     const orderData = req.body;
+    const currentUser = req.user;
+
+    // Auto-populate responsible from logged-in user
+    if (currentUser && (currentUser.role === 'SALES_REP' || currentUser.role === 'SALES_MANAGER')) {
+      orderData.responsible = currentUser.name;
+    }
+
+    if (!orderData.responsible && currentUser) {
+      orderData.responsible = currentUser.name || currentUser.email;
+    }
+
+    // Fallback if no user (should not happen with authMiddleware)
+    if (!orderData.responsible) orderData.responsible = "Web";
 
     // 1. Basic Validation
     if (!orderData.customerName || !orderData.products || orderData.products.length === 0) {
@@ -43,7 +57,6 @@ export async function createOrder(req: Request, res: Response, next: NextFunctio
     // Default defaults
     if (!orderData.orderDate) orderData.orderDate = new Date();
     if (!orderData.salesChannel) orderData.salesChannel = "Web";
-    if (!orderData.responsible) orderData.responsible = "Web";
     if (!orderData.paymentMethod) orderData.paymentMethod = "Por confirmar";
 
     // Handle Settlement in Island during creation
@@ -196,10 +209,16 @@ Valor Envío: $${orderData.deliveryValue || 0}
 /**
  * Get all orders with optional filtering
  */
-export async function getOrders(req: Request, res: Response, next: NextFunction) {
+export async function getOrders(req: AuthRequest, res: Response, next: NextFunction) {
   try {
     const { search, startDate, endDate } = req.query;
+    const currentUser = req.user;
     const query: any = {};
+
+    // Data Isolation for Sales Reps
+    if (currentUser && currentUser.role === 'SALES_REP') {
+      query.responsible = currentUser.name;
+    }
 
     // 1. Search Filter (Name, RUC, Email)
     if (search) {
@@ -276,7 +295,7 @@ export async function getOrders(req: Request, res: Response, next: NextFunction)
 /**
  * Get single order by ID
  */
-export async function getOrderById(req: Request, res: Response, next: NextFunction) {
+export async function getOrderById(req: AuthRequest, res: Response, next: NextFunction) {
   try {
     const { id } = req.params;
     const order = await models.orders.findById(id);
@@ -302,7 +321,7 @@ export async function getOrderById(req: Request, res: Response, next: NextFuncti
  * Process all pending invoices for the day
  * This should be called by a CRON job at 11:59 PM
  */
-export async function processPendingInvoices(req: Request, res: Response, next: NextFunction) {
+export async function processPendingInvoices(req: AuthRequest, res: Response, next: NextFunction) {
   try {
 
     // Find all orders with invoiceNeeded: true AND invoiceStatus: 'PENDING'
@@ -423,7 +442,7 @@ export async function processPendingInvoices(req: Request, res: Response, next: 
  * Update invoice data for an existing order
  * Allowed only if invoiceStatus is 'PENDING'
  */
-export async function updateInvoiceData(req: Request, res: Response, next: NextFunction) {
+export async function updateInvoiceData(req: AuthRequest, res: Response, next: NextFunction) {
   try {
     const { id } = req.params;
     const { invoiceNeeded, invoiceData } = req.body;
@@ -475,7 +494,7 @@ export async function updateInvoiceData(req: Request, res: Response, next: NextF
  * Update an existing order (Generic)
  * PUT /api/orders/:id
  */
-export async function updateOrder(req: Request, res: Response, next: NextFunction) {
+export async function updateOrder(req: AuthRequest, res: Response, next: NextFunction) {
   try {
     const { id } = req.params;
     const updateData = req.body;
@@ -561,7 +580,7 @@ function resolveBankId(inputName: string | undefined): string {
  * Register a collection (cobro) for an order
  * POST /api/orders/:id/collection
  */
-export async function registerCollection(req: Request, res: Response, next: NextFunction) {
+export async function registerCollection(req: AuthRequest, res: Response, next: NextFunction) {
   try {
     const { id } = req.params;
     const collectionData = req.body;
@@ -690,7 +709,7 @@ export async function registerCollection(req: Request, res: Response, next: Next
  * Manually trigger invoice generation for a specific order
  * POST /api/orders/:id/invoice/generate
  */
-export async function generateInvoice(req: Request, res: Response, next: NextFunction) {
+export async function generateInvoice(req: AuthRequest, res: Response, next: NextFunction) {
   try {
     const { id } = req.params;
     const order = await models.orders.findById(id);
@@ -766,7 +785,7 @@ export async function generateInvoice(req: Request, res: Response, next: NextFun
  * Get Invoice PDF Link
  * GET /api/orders/:id/invoice-pdf
  */
-export async function getInvoicePdf(req: Request, res: Response, next: NextFunction) {
+export async function getInvoicePdf(req: AuthRequest, res: Response, next: NextFunction) {
   try {
     const { id } = req.params;
     const order = await models.orders.findById(id);
@@ -798,7 +817,7 @@ export async function getInvoicePdf(req: Request, res: Response, next: NextFunct
  * Settle an order in a physical island (Branch)
  * Marks it as settled locally and registers an 'ISLA' payment.
  */
-export async function settleOrderInIsland(req: Request, res: Response) {
+export async function settleOrderInIsland(req: AuthRequest, res: Response) {
   try {
     const { id } = req.params;
     const { islandName } = req.body;
@@ -862,7 +881,7 @@ export async function settleOrderInIsland(req: Request, res: Response) {
  * Get delivery report with totals and grouped data
  * GET /api/orders/reports/delivery
  */
-export async function getDeliveryReport(req: Request, res: Response, next: NextFunction) {
+export async function getDeliveryReport(req: AuthRequest, res: Response, next: NextFunction) {
   try {
     const { startDate, endDate, deliveryPersonId } = req.query;
 
@@ -945,7 +964,7 @@ export async function getDeliveryReport(req: Request, res: Response, next: NextF
  * Bulk assign multiple orders to a delivery person
  * POST /api/orders/bulk-assign
  */
-export async function bulkAssignOrders(req: Request, res: Response, next: NextFunction) {
+export async function bulkAssignOrders(req: AuthRequest, res: Response, next: NextFunction) {
   try {
     const { orderIds, deliveryPerson } = req.body;
 
@@ -983,7 +1002,7 @@ export async function bulkAssignOrders(req: Request, res: Response, next: NextFu
  * Reassign all orders from one delivery person to another (or unassign)
  * POST /api/orders/reassign-delivery
  */
-export async function reassignDelivery(req: Request, res: Response, next: NextFunction) {
+export async function reassignDelivery(req: AuthRequest, res: Response, next: NextFunction) {
   try {
     const { oldPersonId, newPerson } = req.body;
 
@@ -1020,7 +1039,7 @@ export async function reassignDelivery(req: Request, res: Response, next: NextFu
  * Return an order (Devolución)
  * PUT /api/orders/:id/return
  */
-export async function returnOrder(req: Request, res: Response) {
+export async function returnOrder(req: AuthRequest, res: Response) {
   try {
     const { id } = req.params;
     const { notes, reportedBy } = req.body;
@@ -1057,7 +1076,7 @@ export async function returnOrder(req: Request, res: Response) {
  * Delete an order permanently
  * DELETE /api/orders/:id
  */
-export async function deleteOrder(req: Request, res: Response, next: NextFunction) {
+export async function deleteOrder(req: AuthRequest, res: Response, next: NextFunction) {
   try {
     const { id } = req.params;
     const order = await models.orders.findById(id);

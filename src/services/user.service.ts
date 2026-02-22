@@ -16,7 +16,7 @@ export class UserService {
 
     if (!isCorrect) throw new Error("PASSWORD_INCORRECT");
 
-    const token = await generateToken(user.id);
+    const token = await generateToken(user);
 
     const userObj = user.toObject();
     delete userObj.password;
@@ -62,6 +62,39 @@ export class UserService {
   }
 
   /**
+   * Update user
+   */
+  async updateUser(id: string, data: Partial<IUser>) {
+    const { password, ...rest } = data;
+    const updateData: any = { ...rest };
+
+    if (password && password.trim() !== "") {
+      updateData.password = await bcrypt.hash(password, 10);
+    }
+
+    const updatedUser = await models.users.findByIdAndUpdate(
+      id,
+      { $set: updateData },
+      { new: true }
+    );
+
+    if (!updatedUser) throw new Error("USER_NOT_FOUND");
+
+    const userObj = updatedUser.toObject();
+    delete userObj.password;
+    return userObj;
+  }
+
+  /**
+   * Delete user
+   */
+  async deleteUser(id: string) {
+    const result = await models.users.findByIdAndDelete(id);
+    if (!result) throw new Error("USER_NOT_FOUND");
+    return true;
+  }
+
+  /**
    * Seed initial users if they don't exist
    */
   async seedInitialUsers() {
@@ -70,7 +103,7 @@ export class UserService {
         email: "ventas@nicole.com.ec",
         password: "Nicole2020!",
         name: "Ventas",
-        role: "sales",
+        role: "SALES_MANAGER",
       },
       {
         email: "produccion@nicole.com.ec",
@@ -97,9 +130,12 @@ export class UserService {
       const exists = await this.findByEmail(userData.email);
       if (!exists) {
         await this.createUser(userData as IUser);
-      } else {
+        console.log(`✅ Seeded user: ${userData.email}`);
       }
     }
+
+    // Example instructions for Sales Manager:
+    // User ventas@nicole.com.ec can now create SALES_REP users via the Management API.
 
   }
 }
