@@ -13,9 +13,12 @@ const posRestockService = new POSRestockService();
  */
 export async function getIncomingDispatches(req: Request, res: Response) {
   try {
-    const { branch, search, filterMode, date } = req.query;
+    const { branch, search, filterMode, date, receptionStatus } = req.query;
 
-    const filters: any = { search: search as string };
+    const filters: any = {
+      search: search as string,
+      receptionStatus: receptionStatus as string | string[]
+    };
 
     // --- Date Calculation Logic ---
     let { startDate, endDate } = getECDateRange(getEcuadorNow().toISOString().split('T')[0], false);
@@ -276,5 +279,31 @@ export async function getRestockHistory(req: Request, res: Response): Promise<vo
   } catch (error: any) {
     console.error("Error retrieving restock history:", error);
     res.status(HttpStatusCode.InternalServerError).send({ message: "Failed to retrieve history.", error: error.message });
+  }
+}
+
+/**
+ * PUT /api/pos/orders/:orderId/settle
+ * Marks an order as settled in a physical island branch.
+ */
+export async function settleOrder(req: Request, res: Response): Promise<void> {
+  try {
+    const { orderId } = req.params;
+    const { islandName } = req.body;
+
+    if (!islandName) {
+      res.status(HttpStatusCode.BadRequest).send({ message: "islandName is required in body." });
+      return;
+    }
+
+    const result = await posService.settleOrder(orderId, islandName);
+
+    res.status(HttpStatusCode.Ok).send({
+      message: "Order settled in island successfully.",
+      data: result
+    });
+  } catch (error: any) {
+    console.error("Error settling order from POS:", error);
+    res.status(HttpStatusCode.InternalServerError).send({ message: "Failed to settle order.", error: error.message });
   }
 }

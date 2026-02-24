@@ -8,6 +8,7 @@ export interface IPOSDailyEntryItem {
   stockFinal: number;
   stockObjectiveTomorrow: number;
   pedidoSugerido: number;
+  pedidoFinal: number;
 }
 
 export interface IPOSDailyEntry extends Document {
@@ -28,6 +29,7 @@ const POSDailyEntryItemSchema = new Schema<IPOSDailyEntryItem>(
     stockFinal: { type: Number, required: true },
     stockObjectiveTomorrow: { type: Number, required: true },
     pedidoSugerido: { type: Number, required: true },
+    pedidoFinal: { type: Number, required: true },
   },
   { _id: false }
 );

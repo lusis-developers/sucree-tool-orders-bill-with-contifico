@@ -169,6 +169,7 @@ export class POSRestockService {
       bajas: number;
       bajasNote?: string;
       stockFinal: number;
+      pedidoFinal?: number;
       detailedLosses?: Array<{
         quantity: number;
         reason: string;
@@ -227,6 +228,7 @@ export class POSRestockService {
         ? getObjectiveForDow(obj.objectives as WeeklyObjectives, targetDow)
         : 0;
       const pedidoSugerido = Math.max(0, stockObjectiveTomorrow - item.stockFinal);
+      const pedidoFinal = item.pedidoFinal !== undefined ? item.pedidoFinal : pedidoSugerido;
 
       return {
         productName: item.productName,
@@ -236,6 +238,7 @@ export class POSRestockService {
         stockFinal: item.stockFinal,
         stockObjectiveTomorrow,
         pedidoSugerido,
+        pedidoFinal,
       };
     });
 
@@ -255,7 +258,7 @@ export class POSRestockService {
     );
 
     // 3. Sync with Production (Order model)
-    const restockItems = processedItems.filter(i => i.pedidoSugerido > 0);
+    const restockItems = processedItems.filter(i => i.pedidoFinal > 0);
 
     if (restockItems.length === 0) {
       // If no suggested orders, remove any existing restock order for this branch/date
@@ -281,7 +284,7 @@ export class POSRestockService {
         productionStage: "PENDING",
         products: restockItems.map(item => ({
           name: item.productName,
-          quantity: item.pedidoSugerido,
+          quantity: item.pedidoFinal,
           price: 0,
           contifico_id: objectiveMap[item.productName]?.contificoId,
           productionStatus: "PENDING",

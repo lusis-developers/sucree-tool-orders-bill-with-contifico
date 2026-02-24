@@ -30,6 +30,14 @@ export class POSService {
       };
     }
 
+    if (filters.receptionStatus) {
+      if (Array.isArray(filters.receptionStatus)) {
+        query["dispatches.receptionStatus"] = { $in: filters.receptionStatus };
+      } else {
+        query["dispatches.receptionStatus"] = filters.receptionStatus;
+      }
+    }
+
     // Fetch orders
     const orders = await models.orders.find(query)
       .sort({ deliveryDate: -1 })
@@ -180,6 +188,44 @@ export class POSService {
     order.status = "DELIVERED";
     // Also update production stage or dispatch status if needed? 
     // For now, let's keep it focused on the top-level status.
+
+    await order.save();
+    return order;
+  }
+
+  /**
+   * Mark an order as settled in a physical island (Branch).
+   */
+  async settleOrder(orderId: string, islandName: string) {
+    if (!Types.ObjectId.isValid(orderId)) {
+      throw new Error("Invalid order ID format");
+    }
+
+    const order = await models.orders.findById(orderId);
+    if (!order) throw new Error("Order not found");
+
+    // Update settlement fields
+    order.settledInIsland = true;
+    order.settledIslandName = islandName;
+
+    // Record 'ISLA' payment to mark as "Paid"
+    const amountToSettle = order.totalValue;
+
+    // Avoid duplicates if already settled or has ISLA payment
+    const hasIslaPayment = (order.payments || []).some((p: any) => p.forma_cobro === 'ISLA' && p.monto === amountToSettle);
+
+    if (!hasIslaPayment) {
+      order.payments.push({
+        forma_cobro: 'ISLA',
+        monto: amountToSettle,
+        fecha: new Date(),
+        reference: `Settled in ${islandName} (POS Bulk)`,
+        status: 'PAID'
+      });
+    }
+
+    // Update paymentMethod for summary views
+    order.paymentMethod = `Isla: ${islandName}`;
 
     await order.save();
     return order;

@@ -10,6 +10,7 @@ import {
   submitRestockDailyEntry,
   getRestockHistory,
   deleteRestockObjective,
+  settleOrder,
 } from "../controllers/pos.controller";
 import { authMiddleware } from "../middlewares/auth.middleware";
 
@@ -37,5 +38,8 @@ router.delete("/restock/objectives/:productName", deleteRestockObjective);
 router.get("/restock/daily-form", getRestockDailyForm);
 router.post("/restock/daily-entry", submitRestockDailyEntry);
 router.get("/restock/history", getRestockHistory);
+
+// Settle order in island
+router.put("/orders/:orderId/settle", settleOrder);
 
 export default router;
