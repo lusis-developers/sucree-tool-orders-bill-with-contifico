@@ -36,6 +36,7 @@ export class POSRestockService {
     unit: string;
     contificoId?: string;
     isGeneral?: boolean;
+    requiresMinimum?: boolean;
     category?: "Producción" | "Bodega";
     objectives: WeeklyObjectives;
   }): Promise<IPOSStockObjective> {
@@ -74,6 +75,9 @@ export class POSRestockService {
       .sort({ date: -1 })
       .lean();
 
+    const lastEntryItems = lastEntry ? (lastEntry.items as any[]) : [];
+    const lastEntryDateStr = lastEntry ? toDateStr(lastEntry.date) : null;
+
     // Also fetch today's losses if any to support full state restoration (editability)
     const todayLosses = await models.posLosses.find({ branch, date: formDate }).lean();
     const lossesByProduct: Record<string, any[]> = {};
@@ -86,33 +90,47 @@ export class POSRestockService {
       });
     }
 
-    const items = objectives.map((obj: any) => {
+    // Filter objectives:
+    // - Catalog products (isGeneral = false) ALWAYS show.
+    // - Manual items (isGeneral = true) ONLY show if:
+    //   a) requiresMinimum = true
+    //   b) OR they have an entry in today's report (to allow editing/restoring)
+    const filteredObjectives = objectives.filter((obj: any) => {
+      if (!obj.isGeneral) return true;
+      if (obj.requiresMinimum) return true;
+
+      const hasTodayEntry = lastEntryDateStr === formDateStr &&
+        lastEntryItems.some((i: any) => i.productName === obj.productName);
+
+      return hasTodayEntry;
+    });
+
+    const items = filteredObjectives.map((obj: any) => {
       const stockObjectiveToday = getObjectiveForDow(obj.objectives as WeeklyObjectives, formDow);
       const stockObjectiveTomorrow = getObjectiveForDow(obj.objectives as WeeklyObjectives, targetDow);
 
       let lastEntryData: any = undefined;
-      if (lastEntry) {
-        const found = (lastEntry.items as any[]).find(
-          (i: any) => i.productName === obj.productName
-        );
+      const found = lastEntryItems.find(
+        (i: any) => i.productName === obj.productName
+      );
 
-        if (found) {
-          const isToday = toDateStr(lastEntry.date) === formDateStr;
-          lastEntryData = {
-            stockFinal: found.stockFinal,
-            bajas: found.bajas,
-            pedidoSugerido: found.pedidoSugerido,
-            date: toDateStr(lastEntry.date),
-            // Include detailed losses only if it matches today's entry
-            detailedLosses: isToday ? (lossesByProduct[obj.productName] || []) : []
-          };
-        }
+      if (found) {
+        const isToday = lastEntryDateStr === formDateStr;
+        lastEntryData = {
+          stockFinal: found.stockFinal,
+          bajas: found.bajas,
+          pedidoSugerido: found.pedidoSugerido,
+          date: lastEntryDateStr,
+          // Include detailed losses only if it matches today's entry
+          detailedLosses: isToday ? (lossesByProduct[obj.productName] || []) : []
+        };
       }
 
       return {
         productName: obj.productName,
         unit: obj.unit,
         isGeneral: obj.isGeneral || false,
+        requiresMinimum: obj.requiresMinimum || false,
         category: obj.category || "Producción",
         stockObjectiveToday,
         stockObjectiveTomorrow,

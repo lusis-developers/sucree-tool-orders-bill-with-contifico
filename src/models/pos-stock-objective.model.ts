@@ -16,6 +16,7 @@ export interface IPOSStockObjective extends Document {
   unit: string;
   contificoId?: string;
   isGeneral: boolean;
+  requiresMinimum: boolean;
   category: "Producción" | "Bodega";
   objectives: WeeklyObjectives;
 }
@@ -31,6 +32,7 @@ const POSStockObjectiveSchema = new Schema<IPOSStockObjective>(
     unit: { type: String, required: true, default: "unidad" },
     contificoId: { type: String },
     isGeneral: { type: Boolean, default: false },
+    requiresMinimum: { type: Boolean, default: false },
     category: {
       type: String,
       enum: ["Producción", "Bodega"],

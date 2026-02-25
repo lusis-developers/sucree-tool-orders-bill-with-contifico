@@ -188,12 +188,12 @@ export async function getRestockObjectives(req: Request, res: Response): Promise
  */
 export async function upsertRestockObjective(req: Request, res: Response): Promise<void> {
   try {
-    const { branch, productName, unit, contificoId, isGeneral, category, objectives } = req.body;
+    const { branch, productName, unit, contificoId, isGeneral, requiresMinimum, category, objectives } = req.body;
     if (!branch || !productName || !unit || !objectives) {
       res.status(HttpStatusCode.BadRequest).send({ message: "branch, productName, unit, and objectives are required." });
       return;
     }
-    const data = await posRestockService.upsertObjective({ branch, productName, unit, contificoId, isGeneral, category, objectives });
+    const data = await posRestockService.upsertObjective({ branch, productName, unit, contificoId, isGeneral, requiresMinimum, category, objectives });
     res.status(HttpStatusCode.Ok).send({ message: "Objective saved.", data });
   } catch (error: any) {
     console.error("Error upserting restock objective:", error);
