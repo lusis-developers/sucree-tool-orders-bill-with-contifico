@@ -11,10 +11,12 @@ export type WeeklyObjectives = {
 };
 
 export interface IPOSStockObjective extends Document {
-  branch: "San Marino" | "Mall del Sol";
+  branch: "San Marino" | "Mall del Sol" | "Centro de Producción";
   productName: string;
   unit: string;
   contificoId?: string;
+  isGeneral: boolean;
+  category: "Producción" | "Bodega";
   objectives: WeeklyObjectives;
 }
 
@@ -22,12 +24,18 @@ const POSStockObjectiveSchema = new Schema<IPOSStockObjective>(
   {
     branch: {
       type: String,
-      enum: ["San Marino", "Mall del Sol"],
+      enum: ["San Marino", "Mall del Sol", "Centro de Producción"],
       required: true,
     },
     productName: { type: String, required: true },
     unit: { type: String, required: true, default: "unidad" },
     contificoId: { type: String },
+    isGeneral: { type: Boolean, default: false },
+    category: {
+      type: String,
+      enum: ["Producción", "Bodega"],
+      default: "Producción",
+    },
     objectives: {
       monday: { type: Number, default: 0 },
       tuesday: { type: Number, default: 0 },
