@@ -66,7 +66,8 @@ export async function getIncomingDispatches(req: Request, res: Response) {
  */
 export async function confirmReception(req: Request, res: Response) {
   try {
-    const { orderId, dispatchId } = req.params;
+    const orderId = req.params.orderId as string;
+    const dispatchId = req.params.dispatchId as string;
     const { receivedBy, receptionNotes, items } = req.body;
 
     if (!items || !Array.isArray(items)) {
@@ -149,7 +150,7 @@ export async function getPickupOrders(req: Request, res: Response) {
  */
 export async function deliverPickupOrder(req: Request, res: Response) {
   try {
-    const { orderId } = req.params;
+    const orderId = req.params.orderId as string;
 
     const result = await posService.markAsDelivered(orderId);
 
@@ -207,7 +208,7 @@ export async function upsertRestockObjective(req: Request, res: Response): Promi
 export async function deleteRestockObjective(req: Request, res: Response): Promise<void> {
   try {
     const { branch } = req.query;
-    const { productName } = req.params;
+    const productName = req.params.productName as string;
 
     if (!branch || !productName) {
       res.status(HttpStatusCode.BadRequest).send({ message: "branch query param and productName path param are required." });
@@ -288,7 +289,7 @@ export async function getRestockHistory(req: Request, res: Response): Promise<vo
  */
 export async function settleOrder(req: Request, res: Response): Promise<void> {
   try {
-    const { orderId } = req.params;
+    const orderId = req.params.orderId as string;
     const { islandName } = req.body;
 
     if (!islandName) {

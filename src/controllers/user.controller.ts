@@ -71,7 +71,7 @@ export async function updateUser(
   next: NextFunction
 ) {
   try {
-    const { id } = req.params;
+    const id = req.params.id as string;
     const user = await userService.updateUser(id, req.body);
     res.status(200).send(user);
     return;
@@ -86,7 +86,7 @@ export async function deleteUser(
   next: NextFunction
 ) {
   try {
-    const { id } = req.params;
+    const id = req.params.id as string;
     await userService.deleteUser(id);
     res.status(200).send({ message: "USER_DELETED" });
     return;

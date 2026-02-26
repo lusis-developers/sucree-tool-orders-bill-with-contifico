@@ -33,7 +33,7 @@ export async function getAllProductionOrders(req: Request, res: Response) {
 
 export async function updateProductionTask(req: Request, res: Response) {
   try {
-    const { id } = req.params;
+    const id = req.params.id as string;
     const { stage, notes } = req.body;
     const updatedTask = await productionService.updateTask(id, { stage, notes });
     if (!updatedTask) {
@@ -74,7 +74,7 @@ export async function getItemsSummary(req: Request, res: Response) {
 
 export async function registerDispatchOrder(req: Request, res: Response) {
   try {
-    const { id } = req.params;
+    const id = req.params.id as string;
     // Body: { destination, items, notes, reportedBy }
     const result = await productionService.registerDispatch(id, req.body);
     res.status(HttpStatusCode.Ok).send({ message: "Dispatch reported successfully.", data: result });
@@ -133,7 +133,8 @@ export async function registerDispatchProgress(req: Request, res: Response) {
 
 export async function editDispatchOrder(req: Request, res: Response) {
   try {
-    const { id, dispatchId } = req.params;
+    const id = req.params.id as string;
+    const dispatchId = req.params.dispatchId as string;
     // Body: { items, notes }
     const result = await productionService.updateDispatch(id, dispatchId, req.body);
     res.status(HttpStatusCode.Ok).send({ message: "Dispatch updated successfully.", data: result });
@@ -145,7 +146,7 @@ export async function editDispatchOrder(req: Request, res: Response) {
 
 export async function updateItemStatus(req: Request, res: Response) {
   try {
-    const { id } = req.params;
+    const id = req.params.id as string;
     const { productName, status, notes } = req.body;
 
     if (!productName || !status) {
@@ -210,7 +211,7 @@ export async function batchRegisterProgress(req: Request, res: Response) {
 
 export async function voidOrder(req: Request, res: Response) {
   try {
-    const { id } = req.params;
+    const id = req.params.id as string;
     const result = await productionService.voidOrder(id);
     res.status(HttpStatusCode.Ok).send({ message: "Order voided", data: result });
   } catch (error: any) {
@@ -220,7 +221,7 @@ export async function voidOrder(req: Request, res: Response) {
 
 export async function revertOrder(req: Request, res: Response) {
   try {
-    const { id } = req.params;
+    const id = req.params.id as string;
     const result = await productionService.revertOrder(id);
     res.status(HttpStatusCode.Ok).send({ message: "Order reverted to production", data: result });
   } catch (error: any) {
@@ -230,7 +231,7 @@ export async function revertOrder(req: Request, res: Response) {
 
 export async function restoreOrder(req: Request, res: Response) {
   try {
-    const { id } = req.params;
+    const id = req.params.id as string;
     const result = await productionService.restoreOrder(id);
     res.status(HttpStatusCode.Ok).send({ message: "Order restored", data: result });
   } catch (error: any) {
@@ -240,7 +241,7 @@ export async function restoreOrder(req: Request, res: Response) {
 }
 export async function returnOrder(req: Request, res: Response) {
   try {
-    const { id } = req.params;
+    const id = req.params.id as string;
     const { notes, reportedBy } = req.body;
 
     if (!notes) {
