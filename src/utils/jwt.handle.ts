@@ -2,10 +2,19 @@ import { sign, verify } from "jsonwebtoken";
 
 export const JWT_SECRET = process.env.JWT_SECRET || "token.01010101";
 
-const generateToken = async (id: string) => {
-  const jwt = sign({ id }, JWT_SECRET, {
-    expiresIn: "2h",
-  });
+const generateToken = async (user: any) => {
+  const jwt = sign(
+    {
+      id: user._id || user.id,
+      name: user.name,
+      email: user.email,
+      role: user.role
+    },
+    JWT_SECRET,
+    {
+      expiresIn: "12h", // Increased for better UX in sales tools
+    }
+  );
   return jwt;
 };
 

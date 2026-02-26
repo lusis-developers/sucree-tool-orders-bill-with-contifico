@@ -1,5 +1,6 @@
 
 import { OrderModel } from "../models/order.model";
+import { getECDateRange, getEcuadorNow } from "../utils/date.utils";
 
 export class ProductionService {
   /**
@@ -128,9 +129,7 @@ export class ProductionService {
     }
 
     // 1. Define Time Buckets (normalized to Ecuador UTC-5)
-    // We need these for Filtering Logic AND Bucket Assigning
-    const now = new Date();
-    const ecNow = new Date(now.getTime() - (5 * 3600 * 1000));
+    const ecNow = getEcuadorNow();
 
     const toDayStr = (d: Date) => d.toISOString().split('T')[0];
     const todayStr = toDayStr(ecNow);
@@ -151,11 +150,8 @@ export class ProductionService {
       // Mongo stored dates are full ISO objects. 
       // Simple string comparison on YYYY-MM-DD works if we project, but for index efficiency we should use Date ranges.
 
-      const todayStart = new Date(todayStr + 'T00:00:00.000Z');
-      const todayEnd = new Date(todayStr + 'T23:59:59.999Z');
-
-      const tomorrowStart = new Date(tomorrowStr + 'T00:00:00.000Z');
-      const tomorrowEnd = new Date(tomorrowStr + 'T23:59:59.999Z');
+      const { startDate: todayStart, endDate: todayEnd } = getECDateRange(todayStr, false);
+      const { startDate: tomorrowStart, endDate: tomorrowEnd } = getECDateRange(tomorrowStr, false);
 
       // Adjust for Timezone offset if needed, but existing logic used simple string compare on output.
       // Let's stick to the string projection logic inside aggregate if we want perfect match with previous logic,
@@ -602,24 +598,22 @@ export class ProductionService {
   }
 
   async getReportsStats(range: 'today' | 'week') {
-    const now = new Date();
-    const ecNow = new Date(now.getTime() - (5 * 3600 * 1000));
-    const y = ecNow.getUTCFullYear();
-    const m = ecNow.getUTCMonth();
-    const d = ecNow.getUTCDate();
+    const ecNow = getEcuadorNow();
+    const todayStr = ecNow.toISOString().split('T')[0];
 
     let query: any = {};
 
     if (range === 'today') {
+      const { startDate, endDate } = getECDateRange(todayStr, false);
       query = {
         deliveryDate: {
-          $gte: new Date(Date.UTC(y, m, d, 0, 0, 0, 0)),
-          $lte: new Date(Date.UTC(y, m, d, 23, 59, 59, 999))
+          $gte: startDate,
+          $lte: endDate
         }
       };
     } else {
       // Next 7 Days from EC Today
-      const start = new Date(Date.UTC(y, m, d, 0, 0, 0, 0));
+      const { startDate: start } = getECDateRange(todayStr, false);
       const end = new Date(start);
       end.setUTCDate(end.getUTCDate() + 7);
       end.setUTCHours(23, 59, 59, 999);

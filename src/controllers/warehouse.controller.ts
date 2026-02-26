@@ -10,7 +10,7 @@ interface IAuthRequest extends Request {
 // --- Create Movement ---
 async function createMovement(req: IAuthRequest, res: Response, next: NextFunction) {
   try {
-    const { type, rawMaterial, quantity, provider, entity, observation } = req.body;
+    const { type, rawMaterial, quantity, provider, entity, observation, unitCost, totalValue, responsible } = req.body;
     // Fallback to body user if req.user is missing (e.g. if auth middleware is bypassed or fails)
     const userId = req.user?.id || req.body.user;
 
@@ -34,10 +34,11 @@ async function createMovement(req: IAuthRequest, res: Response, next: NextFuncti
     }
 
     // 3. Handle Logic based on Type
-    if (type === "OUT") {
-      if (!entity) {
+    if (type === "OUT" || type === "LOSS") {
+      if (type === "OUT" && !entity) {
         return res.status(400).send({ message: "Entity is required for OUT movements." });
       }
+
       if (material.quantity < quantity) {
         return res.status(400).send({
           message: `Insufficient stock. Available: ${material.quantity} ${material.unit}`,
@@ -57,9 +58,12 @@ async function createMovement(req: IAuthRequest, res: Response, next: NextFuncti
       type,
       rawMaterial,
       quantity,
+      unitCost: unitCost !== undefined ? Number(unitCost) : undefined,
+      totalValue: totalValue !== undefined ? Number(totalValue) : undefined,
       provider: type === "IN" ? provider : undefined,
       entity: type === "OUT" ? entity : undefined,
       user: userId,
+      responsible,
       observation,
       date: req.body.date ? new Date(req.body.date) : new Date(),
     });

@@ -5,7 +5,10 @@ import { ParLevelModel } from "./par-level.model";
 import { DeliveryPersonModel } from "./delivery-person.model";
 import { ProviderModel } from "./provider.model";
 import { RawMaterialModel } from "./raw-material.model";
-import { ProviderCategoryModel } from "./provider-category.model";
+import { POSStockObjectiveModel } from "./pos-stock-objective.model";
+import { POSDailyEntryModel } from "./pos-daily-entry.model";
+import { POSLossModel } from "./pos-loss.model";
+import { SupplierOrderModel } from "./supplier-order.model";
 
 export const models = {
   orders: OrderModel,
@@ -15,5 +18,8 @@ export const models = {
   deliveryPersons: DeliveryPersonModel,
   providers: ProviderModel,
   rawMaterials: RawMaterialModel,
-  providerCategories: ProviderCategoryModel,
+  posStockObjectives: POSStockObjectiveModel,
+  posDailyEntries: POSDailyEntryModel,
+  posLosses: POSLossModel,
+  supplierOrders: SupplierOrderModel,
 };

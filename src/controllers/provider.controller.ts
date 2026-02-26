@@ -4,10 +4,35 @@ import { models } from "../models";
 
 export async function getProviders(req: Request, res: Response, next: NextFunction) {
   try {
-    const providers = await models.providers.find().sort({ name: 1 });
+    let query: any = {};
+    const { search } = req.query;
+
+    if (search) {
+      const searchRegex = new RegExp(String(search), 'i');
+      query = {
+        $or: [
+          { name: searchRegex },
+          { ruc: searchRegex },
+          { email: searchRegex },
+          { phone: searchRegex }
+        ]
+      };
+    }
+
+    const providers = await models.providers.find(query).sort({ name: 1 }).lean();
+
+    // Get item counts for all providers
+    const providersWithExtras = await Promise.all(providers.map(async (provider) => {
+      const itemCount = await models.rawMaterials.countDocuments({ provider: provider._id });
+      return {
+        ...provider,
+        itemCount
+      };
+    }));
+
     res.status(HttpStatusCode.Ok).send({
       message: "Providers retrieved successfully.",
-      data: providers
+      data: providersWithExtras
     });
     return;
   } catch (error) {

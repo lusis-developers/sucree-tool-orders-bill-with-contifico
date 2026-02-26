@@ -4,7 +4,21 @@ import { models } from "../models";
 
 export async function getRawMaterials(req: Request, res: Response, next: NextFunction) {
   try {
-    const materials = await models.rawMaterials.find().populate('provider').sort({ name: 1 });
+    let query: any = {};
+    const { search } = req.query;
+
+    if (search) {
+      const searchRegex = new RegExp(String(search), 'i');
+      query = {
+        $or: [
+          { name: searchRegex },
+          { code: searchRegex },
+          { item: searchRegex }
+        ]
+      };
+    }
+
+    const materials = await models.rawMaterials.find(query).populate('provider').sort({ name: 1 });
     res.status(HttpStatusCode.Ok).send({
       message: "Raw materials retrieved successfully.",
       data: materials
