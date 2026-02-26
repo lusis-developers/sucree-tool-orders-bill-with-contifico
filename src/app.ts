@@ -16,7 +16,7 @@ export default function createApp() {
     "http://localhost:8101",
     "http://localhost:8080",
     "http://localhost:5173",
-    "https://sucree-tool-orders-bill-with-contif.vercel.app"
+    "https://sucree-platform.netlify.app"
   ];
 
   const corsOptions = {
