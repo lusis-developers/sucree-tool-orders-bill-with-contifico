@@ -100,25 +100,25 @@ export class UserService {
   async seedInitialUsers() {
     const usersToSeed = [
       {
-        email: "ventas@nicole.com.ec",
+        email: "ventas@sucree.com.ec",
         password: "Nicole2020!",
         name: "Ventas",
         role: "SALES_MANAGER",
       },
       {
-        email: "produccion@nicole.com.ec",
+        email: "produccion@sucree.com.ec",
         password: "Nicole2020!",
         name: "Producción",
         role: "production",
       },
       {
-        email: "retailmanager@nicole.com.ec",
+        email: "retailmanager@sucree.com.ec",
         password: "Nicole2020!",
         name: "Retail Manager",
         role: "RetailManager",
       },
       {
-        email: "compras@nicole.com.ec",
+        email: "compras@sucree.com.ec",
         password: "Nicole2020!",
         name: "Supply Chain Manager",
         role: "SUPPLY_CHAIN_MANAGER",
@@ -135,7 +135,7 @@ export class UserService {
     }
 
     // Example instructions for Sales Manager:
-    // User ventas@nicole.com.ec can now create SALES_REP users via the Management API.
+    // User ventas@sucree.com.ec can now create SALES_REP users via the Management API.
 
   }
 }

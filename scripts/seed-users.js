@@ -12,7 +12,7 @@ dotenv_1.default.config({ path: path_1.default.resolve(__dirname, "../.env") });
 const USERS_TO_SEED = [
     {
         name: "Retail Manager",
-        email: "retailmanager@nicole.com.ec",
+        email: "retailmanager@sucree.com.ec",
         password: "Nicole2020!",
         role: "RetailManager",
     },
@@ -26,8 +26,8 @@ async function seedUsers() {
         await mongoose_1.default.connect(dbUri);
         console.log("✅ Connected to MongoDB for seeding.");
         // Cleanup old user if exists
-        await user_model_1.UserModel.deleteOne({ email: "stores@nicole.com.ec" });
-        console.log("🗑️ Removed old user stores@nicole.com.ec if existed.");
+        await user_model_1.UserModel.deleteOne({ email: "stores@sucree.com.ec" });
+        console.log("🗑️ Removed old user stores@sucree.com.ec if existed.");
         for (const userData of USERS_TO_SEED) {
             const existingUser = await user_model_1.UserModel.findOne({ email: userData.email });
             if (existingUser) {

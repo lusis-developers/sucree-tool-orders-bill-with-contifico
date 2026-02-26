@@ -9,7 +9,7 @@ dotenv.config({ path: path.resolve(__dirname, "../.env") });
 
 const USER_TO_SEED = {
   name: "Supply Chain Manager",
-  email: "compras@nicole.com.ec",
+  email: "compras@sucree.com.ec",
   password: "Nicole2020!",
   role: "SUPPLY_CHAIN_MANAGER",
 };
