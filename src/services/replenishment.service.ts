@@ -15,7 +15,7 @@ export class ReplenishmentService {
    * Calculate replenishment for a specific warehouse
    * @param warehouseName Default: "San Marino"
    */
-  async calculateReplenishment(warehouseName: string = "San Marino") {
+  async calculateReplenishment(warehouseName: string = "Entre Ríos") {
     // 1. Get all Par Levels
     let parLevels = await models.parLevels.find();
 

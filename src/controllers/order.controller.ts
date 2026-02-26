@@ -161,7 +161,7 @@ export async function createOrder(req: AuthRequest, res: Response, next: NextFun
     }
 
     const whatsappMessage = `
-CONFIRMACIÓN DE PEDIDO - NICOLE PASTRY
+CONFIRMACIÓN DE PEDIDO - SUCREE CROISSANTERIE
 
 Tipo de Orden: ${typeOfOrder}
 

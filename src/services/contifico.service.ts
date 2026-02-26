@@ -156,8 +156,8 @@ export class ContificoService {
 
       // FIX: Use "Caja Dulcería" POS ID instead of generic API token
       // This ensures the invoice belongs to the physical box where we want to register collections.
-      // POS: Caja Dulcería (00f60268-ca0c-48f9-8768-4f2625fa975a)
-      const POS_DULCERIA_ID = "00f60268-ca0c-48f9-8768-4f2625fa975a";
+      // POS: Sucree Entre Ríos (9e46fe85-9aae-4e34-9a4b-a03859cc02b4)
+      const POS_DULCERIA_ID = "9e46fe85-9aae-4e34-9a4b-a03859cc02b4";
 
       // Standardize ID: Trim spaces
       const rawId = (orderData.invoiceData.ruc || "").trim();
@@ -363,8 +363,8 @@ export class ContificoService {
         const cajas = await this.getCajas();
 
         if (cajas && cajas.length > 0) {
-          // PREFERENCE: "Caja Dulcería" (POS ID: 00f60268-ca0c-48f9-8768-4f2625fa975a)
-          const PREFERRED_POS_ID = "00f60268-ca0c-48f9-8768-4f2625fa975a";
+          // PREFERENCE: Sucree Entre Ríos POS
+          const PREFERRED_POS_ID = "9e46fe85-9aae-4e34-9a4b-a03859cc02b4";
 
           // Strategy: Find ALL sessions for the preferred POS and pick the LATEST one.
           // We ignore 'fecha_cierre' because sometimes active sessions have it populated.

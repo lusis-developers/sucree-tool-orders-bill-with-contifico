@@ -54,11 +54,10 @@ const WarehouseMovementSchema = new Schema<IWarehouseMovement>(
     entity: {
       type: String,
       enum: [
-        "Nicole Pastry Arts - San marino",
-        "Nicole Pastry Arts - Mall del sol",
+        "Sucree - Entre Ríos",
         "Finestra - CDP",
-        "Delacrem - Mall del sol",
-        "Casa mía - Mall del sol",
+        "Delacrem - Entre Ríos",
+        "Casa mía - Entre Ríos",
         "Sucreenda - CDP",
         "Sucree - Vivantino",
       ],

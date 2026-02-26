@@ -631,8 +631,7 @@ export class ProductionService {
     let completedProductionCount = 0;
 
     const byDestination: Record<string, number> = {
-      'San Marino': 0,
-      'Mall del Sol': 0,
+      'Entre Ríos': 0,
       'Centro de Producción': 0,
       'Delivery': 0
     };
@@ -658,10 +657,8 @@ export class ProductionService {
         byDestination['Delivery']++;
       } else {
         const branch = o.branch || 'Centro de Producción';
-        // Normalize branch names slightly if needed, or rely on frontend providing consistent names
-        if (branch.toLowerCase().includes('marino')) byDestination['San Marino']++;
-        else if (branch.toLowerCase().includes('mall') || branch.toLowerCase().includes('sol')) byDestination['Mall del Sol']++;
-        else byDestination['Centro de Producción']++;
+        if (branch.toLowerCase().includes('centro') || branch.toLowerCase().includes('producc')) byDestination['Centro de Producción']++;
+        else byDestination['Entre Ríos']++;
       }
     }
 
@@ -767,12 +764,9 @@ export class ProductionService {
     } else {
       // Branch matching
       // We need flexible matching similar to stats or frontend
-      if (destination.includes('Marino')) {
-        query.branch = { $regex: /marino/i };
-      } else if (destination.includes('Mall') || destination.includes('Sol')) {
-        query.branch = { $regex: /(mall|sol)/i };
+      if (destination.includes('Entre') || destination.includes('Ríos')) {
+        query.branch = { $regex: /(entre|ríos)/i };
       } else if (destination.includes('Centro') || destination.includes('Producc')) {
-        // Fallback or specific
         query.branch = { $regex: /(centro|producc)/i };
       }
       query.deliveryType = { $ne: 'delivery' };

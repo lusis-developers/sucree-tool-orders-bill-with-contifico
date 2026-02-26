@@ -33,7 +33,7 @@ export default function createApp() {
   app.use(express.json({ limit: "50mb" }));
 
   app.get("/", (_req, res: Response) => {
-    res.send("factura y ordenes de nicole backend IS ALIVEEEEEEE debbbugeando:)");
+    res.send("Sucree Croissanterie - Orders & Billing backend IS ALIVE");
   });
 
   routerApi(app);

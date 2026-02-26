@@ -9,7 +9,7 @@ async function dbConnect(): Promise<void> {
     }
 
     await mongoose.connect(DB_URI);
-    console.log("*** SUCCESSFULLY CONNECTED TO DATABASE NICOLE ORDER APP FRIENDDD  ***");
+    console.log("*** SUCCESSFULLY CONNECTED TO DATABASE — SUCREE ORDERS APP ***");
   } catch (error) {
     console.log("*** CONECTION FAILED ***", error);
   }

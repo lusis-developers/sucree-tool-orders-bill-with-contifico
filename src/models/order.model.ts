@@ -50,7 +50,7 @@ export interface IOrder extends Document {
   salesChannel: string;
   products: IOrderProduct[];
   deliveryType: "delivery" | "retiro";
-  branch?: "San Marino" | "Mall del Sol" | "Centro de Producción";
+  branch?: "Entre Ríos" | "Centro de Producción";
   googleMapsLink?: string;
   deliveryAddress?: string;
   totalValue: number;
@@ -167,7 +167,7 @@ const OrderSchema = new Schema<IOrder>(
     },
     branch: {
       type: String,
-      enum: ["San Marino", "Mall del Sol", "Centro de Producción"],
+      enum: ["Entre Ríos", "Centro de Producción"],
       required: false
     },
     googleMapsLink: { type: String },
